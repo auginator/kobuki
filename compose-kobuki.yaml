@@ -1,0 +1,13 @@
+services:
+  kobuki:
+    image: crl/kobuki:humble
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ros2 launch kobuki kobuki.launch.py
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    volumes:
+      - /dev:/dev
+

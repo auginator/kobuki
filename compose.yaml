@@ -1,13 +1,41 @@
+# This docker-compose file sets up two services: kobuki and lidar_node.
+# The kobuki service runs the Kobuki robot base, while the lidar_node service runs
+# the SLAMTEC LIDAR node. Both services are connected to a custom Docker network
+# named ros_network to facilitate communication between them.
 services:
   kobuki:
     image: crl/kobuki:humble
     build:
       context: .
       dockerfile: docker/Dockerfile
-    command: ros2 launch kobuki kobuki.launch.py
+    command: ros2 launch kobuki_node kobuki_node.launch.py
     restart: unless-stopped
-    privileged: true
-    network_mode: host
+    networks:
+      - ros_network
+    environment:
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - CYCLONEDDS_URI=file:///cyclonedds.xml
     volumes:
-      - /dev:/dev
+      - ./cyclonedds.xml:/cyclonedds.xml
+    privileged: true
+    devices:
+      - /dev/kobuki:/dev/kobuki
 
+  lidar_node:
+    build:
+      context: .
+      dockerfile: lidar.Dockerfile
+    networks:
+      - ros_network
+    environment:
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - CYCLONEDDS_URI=file:///cyclonedds.xml
+    volumes:
+      - ./cyclonedds.xml:/cyclonedds.xml
+    privileged: true
+    devices:
+      - /dev/rplidar:/dev/rplidar
+
+networks:
+  ros_network:
+    driver: bridge
