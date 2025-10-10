@@ -7,8 +7,6 @@ services:
       dockerfile: docker/Dockerfile
     command: ros2 launch kobuki kobuki.launch.py
     restart: unless-stopped
-    privileged: true
-
     networks:
       - ros_network
     environment:
@@ -16,6 +14,7 @@ services:
       - CYCLONEDDS_URI=file:///cyclonedds.xml
     volumes:
       - ./cyclonedds.xml:/cyclonedds.xml
+    privileged: true
     devices:
       - /dev:/dev
 
@@ -33,8 +32,6 @@ services:
     privileged: true
     devices:
       - /dev:/dev
-    # Unsure if we need UDEV rules for lidar, if so, add them to the Dockerfile
-    #   - "/dev/ttyUSB0:/dev/ttyUSB0" # CHANGE /dev/ttyUSB0 if your lidar is on a different port
 
 networks:
  ros_network:
