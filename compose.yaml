@@ -24,9 +24,11 @@ services:
   lidar_node:
     build:
       context: .
-      dockerfile: lidar.Dockerfile
+      dockerfile: slam.Dockerfile
     networks:
       - ros_network
+    ports:
+      - "8765:8765"
     environment:
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
       - CYCLONEDDS_URI=file:///cyclonedds.xml
@@ -35,6 +37,20 @@ services:
     privileged: true
     devices:
       - /dev/rplidar:/dev/rplidar
+  # lidar_node:
+  #   build:
+  #     context: .
+  #     dockerfile: lidar.Dockerfile
+  #   networks:
+  #     - ros_network
+  #   environment:
+  #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+  #     - CYCLONEDDS_URI=file:///cyclonedds.xml
+  #   volumes:
+  #     - ./cyclonedds.xml:/cyclonedds.xml
+  #   privileged: true
+  #   devices:
+  #     - /dev/rplidar:/dev/rplidar
 
 networks:
   ros_network:
