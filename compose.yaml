@@ -25,6 +25,7 @@ services:
     build:
       context: .
       dockerfile: slam.Dockerfile
+    command: ros2 launch kobuki slam.launch.py
     networks:
       - ros_network
     ports:
