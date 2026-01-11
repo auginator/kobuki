@@ -4,11 +4,10 @@
 # named ros_network to facilitate communication between them.
 services:
   kobuki:
-    image: crl/kobuki:humble
+    image: crl/kobuki-bringup:humble
     build:
       context: .
-      dockerfile: docker/Dockerfile
-    command: ros2 launch kobuki augs_kobuki_node.launch.py
+      dockerfile: bringup.Dockerfile
     restart: unless-stopped
     networks:
       - ros_network
