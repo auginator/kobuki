@@ -22,7 +22,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory(
                 'kobuki_description'), 'launch', 'kobuki_description.launch.py')
-        )
+        ),
+        launch_arguments={
+            'use_rviz': 'False',
+            'use_sim_time': 'False'
+        }.items()
     )
 
     ld = LaunchDescription()
