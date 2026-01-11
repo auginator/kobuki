@@ -28,9 +28,18 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Foxglove bridge
+    foxglove_bridge = Node(
+        package='foxglove_bridge',
+        executable='foxglove_bridge',
+        name='foxglove_bridge',
+        output='screen'
+    )
+
     ld = LaunchDescription()
 
     ld.add_action(sllidar_launch)
     ld.add_action(static_transform_publisher)
+    ld.add_action(foxglove_bridge)
 
     return ld
