@@ -25,7 +25,6 @@ services:
     build:
       context: .
       dockerfile: slam.Dockerfile
-    command: ros2 launch slam sllidar_with_transform.launch.py
     networks:
       - ros_network
     ports:
