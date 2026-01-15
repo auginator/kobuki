@@ -100,7 +100,7 @@ def main(args=None):
     controller = SlamMappingController()
 
     try:
-        controller.run_interactive()
+        controller.run()
     except KeyboardInterrupt:
         pass
     finally:
