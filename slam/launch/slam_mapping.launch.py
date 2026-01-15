@@ -47,7 +47,6 @@ def generate_launch_description():
         name='slam_mapping_controller',
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
-        prefix='xterm -e',  # Run in separate terminal for interactivity
     )
 
     ld = LaunchDescription()
