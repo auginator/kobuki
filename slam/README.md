@@ -195,7 +195,7 @@ Maps are stored in the `maps/` directory at the project root. This directory is:
 - Ignored by git (except README.md)
 - Shared between host and container
 
-**Location in container:** `/ros2_ws/maps/`  
+**Location in container:** `/ros2_ws/maps/`
 **Location on host:** `./maps/`
 
 ## References
