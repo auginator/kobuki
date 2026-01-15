@@ -1,7 +1,7 @@
 # lidar.Dockerfile
 
-# Use a ROS2 base image
-FROM ros:humble-ros-base
+# Use the kobuki bringup image as base to get kobuki_description and related packages
+FROM crl/kobuki:humble as base
 
 # Set up the workspace directory
 WORKDIR /ros2_ws
@@ -30,10 +30,8 @@ RUN apt-get update && \
 RUN mkdir -p src && \
   git clone https://github.com/slamtec/sllidar_ros2.git src/sllidar_ros2
 
-# Copy the slam package and kobuki packages into the workspace
+# Copy the slam package into the workspace
 COPY slam src/slam
-COPY kobuki_ros/kobuki_description src/kobuki_description
-COPY kobuki_ros_interfaces src/kobuki_ros_interfaces
 
 # Install dependencies for the cloned package
 RUN . /opt/ros/humble/setup.sh && \
@@ -44,4 +42,4 @@ RUN . /opt/ros/humble/setup.sh && \
   colcon build --symlink-install
 
 # Set the entrypoint to source the workspace and run the node
-CMD ["/bin/bash", "-c", ". /opt/ros/humble/setup.sh && . ./install/setup.bash && ros2 launch slam sllidar_with_transform.launch.py"]
+CMD ["/bin/bash", "-c", ". /opt/ros/humble/setup.sh && . /kobuki/install/setup.bash && . ./install/setup.bash && ros2 launch slam sllidar_with_transform.launch.py"]
