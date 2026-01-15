@@ -17,17 +17,6 @@ def generate_launch_description():
         )
     )
 
-    # Static transform from base_footprint to base_link (robot geometry)
-    base_footprint_to_base_link = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='base_footprint_to_base_link',
-        arguments=['--x', '0', '--y', '0', '--z', '0.01',
-                   '--roll', '0', '--pitch', '0', '--yaw', '0',
-                   '--frame-id', 'base_footprint', '--child-frame-id', 'base_link'],
-        output='screen'
-    )
-
     # Static transform publisher from base_link to laser (sensor mounting)
     base_link_to_laser = Node(
         package='tf2_ros',
@@ -50,7 +39,6 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(sllidar_launch)
-    ld.add_action(base_footprint_to_base_link)
     ld.add_action(base_link_to_laser)
     ld.add_action(foxglove_bridge)
 
