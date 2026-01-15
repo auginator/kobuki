@@ -32,7 +32,7 @@ def generate_launch_description():
     # Robot description for robot_state_publisher
     urdf_model = PathJoinSubstitution(
         [FindPackageShare('kobuki_description'),
-         'urdf', 'kobuki.urdf.xacro']
+         'urdf', 'kobuki_standalone.urdf.xacro']
     )
 
     robot_description_param = {
