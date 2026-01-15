@@ -19,11 +19,12 @@ slam/
 │   └── mapper_params_localization.yaml       # Localization mode config
 ├── launch/                    # ROS2 launch files
 │   ├── sllidar_with_transform.launch.py     # Base LIDAR + transforms + Foxglove
-│   ├── slam_mapping.launch.py                # Interactive mapping
-│   └── slam_localization.launch.py           # Interactive localization
-└── scripts/                   # Interactive control scripts
-    ├── slam_controller.py     # Mapping interface (save/quit)
-    └── map_selector.py        # Map selection interface
+│   ├── slam_mapping.launch.py                # Mapping launcher
+│   └── slam_localization.launch.py           # Localization launcher
+└── scripts/                   # Helper scripts
+    ├── slam_controller.py     # Mapping status display
+    ├── map_selector.py        # Map selection interface
+    └── save_map_helper.py     # Interactive map saving
 ```
 
 ## Prerequisites
@@ -43,31 +44,55 @@ docker compose up -d
 ```
 
 This starts `sllidar_with_transform.launch.py` which provides:
-- LIDAR data on `/scan` topic
-- Static transform from `base_link` to `laser` frame
+- LIDAR data on `/s (`base_footprint` → `base_link` → `laser`)
 - Foxglove bridge on port 8765
 
 ### 2. Create a Map (Mapping Mode)
 
-Execute into the running container and launch the mapping interface:
+**Terminal 1 - Start SLAM mapping:**
+
+Execute into the running container and launch the mapping:
 
 ```bash
 docker exec -it collabs-kobuki-lidar_node-1 bash
 ros2 launch slam slam_mapping.launch.py
 ```
 
-**Interactive Controls:**
-- Drive the robot around to build the map (use teleop in another terminal)
+This will:
+- Start SLAM Toolbox in mapping mode
+- Display instructions and available commands
+- Begin building a map as you drive the robot
+
+**Mapping Workflow:**
+- Drive the robot around using teleop (in another terminal or via Foxglove)
 - View the map being built in real-time in Foxglove (topic: `/map`)
-- Press **'s'** to save the current map
-  - You'll be prompted to enter a map name
-  - Default name: `map_YYYYMMDD_HHMMSS`
-  - Maps are saved to `/ros2_ws/maps/` (persisted on host in `./maps/`)
-- Press **'q'** to quit mapping
+- The mapping will continue until you press `Ctrl+C`
+
+**Terminal 2 - Save the map when ready:**
+
+When you're satisfied with the map coverage, open a second terminal and save it:
+
+```bash
+docker exec -it collabs-kobuki-lidar_node-1 bash
+ros2 run slam save_map_helper.py
+```
+
+You'll be prompted to enter a map name (or accept the auto-generated timestamp name).
 
 **Map Files Created:**
 - `<map_name>.posegraph` - SLAM Toolbox pose graph (for localization)
 - `<map_name>.yaml` - ROS map metadata
+- `<map_name>.pgm` - ROS map occupancy grid image
+
+**Alternative - Save using service calls:**
+
+You can also save maps directly using ROS2 services:
+
+```bash
+# Save with custom name
+ros2 service call /slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph \
+  "{filename: '/ros2_ws/maps/my_map'}"
+```
 - `<map_name>.pgm` - ROS map occupancy grid image
 
 ### 3. Load a Map (Localization Mode)
@@ -99,9 +124,19 @@ ros2 launch slam slam_localization.launch.py map_file:=/ros2_ws/maps/my_map.pose
 2. Connect to `ws://localhost:8765` (or your robot's IP)
 3. Add panels to visualize:
    - **Map** - Topic: `/map` (nav_msgs/OccupancyGrid)
-   - **Robot Pose** - Topic: `/tf` (shows base_footprint, base_link, laser frames)
-   - **LIDAR Scan** - Topic: `/scan` (sensor_msgs/LaserScan)
-   - **Robot Path** - Topic: `/slam_toolbox/graph_visualization` (optional)
+   - **Rfootprint` → `base_link`: 0.01m in z-axis (robot geometry)
+- `base_link` → `laser`: 0.1m in z-axis, 180° rotation (sensor mounting)
+
+Adjust if your LIDAR mounting differs.
+
+**Complete TF Tree:**
+```
+map (from SLAM Toolbox when active)
+  └─ odom (from Kobuki odometry)
+      └─ base_footprint
+          └─ base_link
+              └─ laser
+```olbox/graph_visualization` (optional)
 
 ## Configuration
 
@@ -126,32 +161,40 @@ The transforms are configured in `sllidar_with_transform.launch.py`:
 - `base_link` → `laser`: 0.1m in z-axis, 180° rotation (facing backward)
 
 Adjust if your LIDAR mounting differs.
+Saving Maps
 
-## Troubleshooting
+There are three ways to save a map:
 
-### LIDAR not detected
+**1. Using the helper script (recommended):**
 ```bash
-# Check if device exists
-ls -l /dev/rplidar
-
-# Check LIDAR data
-ros2 topic echo /scan
+ros2 run slam save_map_helper.py
 ```
 
-### SLAM Toolbox services not available
+**2. Using service calls directly:**
 ```bash
-# List available services
-ros2 service list | grep slam_toolbox
+# Save as SLAM Toolbox format (.posegraph)
+ros2 service call /slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph \
+  "{filename: '/ros2_ws/maps/my_map'}"
 
-# Check if SLAM Toolbox node is running
-ros2 node list | grep slam_toolbox
+# Save as standard ROS map (.yaml/.pgm)
+ros2 service call /slam_toolbox/save_map slam_toolbox/srv/SaveMap \
+  "{name: {data: '/ros2_ws/maps/my_map'}}"
 ```
 
-### Map not saving
-- Ensure the `/ros2_ws/maps` directory exists in the container
-- Check that the volume mount is configured in `compose.yaml`
-- Verify write permissions
+**3. From Foxglove:**
+- Use the Service Call panel to call `/slam_toolbox/serialize_map`
 
+### Other SLAM Controls
+
+```bash
+# Pause mapping (stop processing new scans)
+ros2 service call /slam_toolbox/pause_new_measurements std_srvs/srv/Empty
+
+# Resume mapping
+ros2 service call /slam_toolbox/resume_new_measurements std_srvs/srv/Empty
+
+# Clear the current map
+ros2 service call /slam_toolbox/clear_queue std_srvs/srv/Empt
 ### Poor mapping quality
 - Drive slowly and smoothly
 - Ensure good LIDAR visibility (avoid transparent/reflective surfaces)

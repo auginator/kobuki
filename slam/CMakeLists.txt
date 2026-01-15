@@ -24,6 +24,7 @@ install(DIRECTORY
 install(PROGRAMS
   scripts/slam_controller.py
   scripts/map_selector.py
+  scripts/save_map_helper.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
