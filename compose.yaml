@@ -33,6 +33,7 @@ services:
       - CYCLONEDDS_URI=file:///cyclonedds.xml
     volumes:
       - ./cyclonedds.xml:/cyclonedds.xml
+      - ./maps:/ros2_ws/maps
     privileged: true
     devices:
       - /dev/rplidar:/dev/rplidar

@@ -21,6 +21,7 @@ RUN apt-get update && \
   apt-get install -y ros-humble-rmw-cyclonedds-cpp && \
   apt-get install ros-humble-kobuki-ros-interfaces && \
   apt-get install -y ros-humble-foxglove-bridge && \
+  apt-get install -y ros-humble-slam-toolbox && \
   rm -rf /var/lib/apt/lists/*
 
 # Clone the Slamtec Lidar ROS2 driver into the src directory

@@ -1,1 +1,6 @@
 .DS_Store
+
+# SLAM maps (binary files, can be large)
+maps/*.posegraph
+maps/*.pgm
+maps/*.yaml
