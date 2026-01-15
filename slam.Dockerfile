@@ -20,7 +20,7 @@ RUN apt-get update && \
   add-apt-repository universe && \
   apt-get install -y ros-humble-rmw-cyclonedds-cpp && \
   apt-get install ros-humble-kobuki-ros-interfaces && \
-  apt-get install -y ros-humble-kobuki-description && \
+  apt-get install -y ros-humble-kobuki-ros && \
   apt-get install -y ros-humble-foxglove-bridge && \
   apt-get install -y ros-humble-slam-toolbox && \
   rm -rf /var/lib/apt/lists/*
