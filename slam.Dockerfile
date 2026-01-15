@@ -19,6 +19,9 @@ RUN apt-get update && \
   apt-get install -y software-properties-common && \
   add-apt-repository universe && \
   apt-get install -y ros-humble-rmw-cyclonedds-cpp && \
+  apt-get install -y ros-humble-xacro && \
+  apt-get install -y ros-humble-joint-state-publisher && \
+  apt-get install -y ros-humble-robot-state-publisher && \
   apt-get install -y ros-humble-foxglove-bridge && \
   apt-get install -y ros-humble-slam-toolbox && \
   rm -rf /var/lib/apt/lists/*
