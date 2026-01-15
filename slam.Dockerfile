@@ -19,8 +19,6 @@ RUN apt-get update && \
   apt-get install -y software-properties-common && \
   add-apt-repository universe && \
   apt-get install -y ros-humble-rmw-cyclonedds-cpp && \
-  apt-get install ros-humble-kobuki-ros-interfaces && \
-  apt-get install -y ros-humble-kobuki-ros && \
   apt-get install -y ros-humble-foxglove-bridge && \
   apt-get install -y ros-humble-slam-toolbox && \
   rm -rf /var/lib/apt/lists/*
@@ -29,8 +27,10 @@ RUN apt-get update && \
 RUN mkdir -p src && \
   git clone https://github.com/slamtec/sllidar_ros2.git src/sllidar_ros2
 
-# Copy the slam package into the workspace
+# Copy the slam package and kobuki packages into the workspace
 COPY slam src/slam
+COPY kobuki_ros/kobuki_description src/kobuki_description
+COPY kobuki_ros_interfaces src/kobuki_ros_interfaces
 
 # Install dependencies for the cloned package
 RUN . /opt/ros/humble/setup.sh && \
