@@ -22,8 +22,8 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='base_link_to_laser_transform',
-        arguments=['--x', '0', '--y', '0', '--z', '0',
-                   '--roll', '0', '--pitch', '0', '--yaw', '0',
+        arguments=['--x', '0', '--y', '0', '--z', '0.1',
+                   '--roll', '0', '--pitch', '0', '--yaw', '3.14159',
                    '--frame-id', 'base_link', '--child-frame-id', 'laser'],
         output='screen'
     )
