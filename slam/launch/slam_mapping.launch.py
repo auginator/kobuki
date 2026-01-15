@@ -18,16 +18,16 @@ from launch.substitutions import LaunchConfiguration
 def generate_launch_description():
     # Get the package directory
     slam_pkg_dir = get_package_share_directory('slam')
-    
+
     # Declare launch arguments
     use_sim_time = LaunchConfiguration('use_sim_time')
-    
+
     declare_use_sim_time = DeclareLaunchArgument(
         'use_sim_time',
         default_value='false',
         description='Use simulation (Gazebo) clock if true'
     )
-    
+
     # SLAM Toolbox node in async mapping mode
     slam_toolbox_node = Node(
         package='slam_toolbox',
@@ -39,7 +39,7 @@ def generate_launch_description():
             {'use_sim_time': use_sim_time}
         ],
     )
-    
+
     # Interactive mapping controller
     slam_controller = Node(
         package='slam',
@@ -49,14 +49,14 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}],
         prefix='xterm -e',  # Run in separate terminal for interactivity
     )
-    
+
     ld = LaunchDescription()
-    
+
     # Add launch arguments
     ld.add_action(declare_use_sim_time)
-    
+
     # Add nodes
     ld.add_action(slam_toolbox_node)
     ld.add_action(slam_controller)
-    
+
     return ld
