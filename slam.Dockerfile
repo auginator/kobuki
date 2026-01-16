@@ -35,10 +35,12 @@ COPY slam src/slam
 
 # Install dependencies for the cloned package
 RUN . /opt/ros/humble/setup.sh && \
+  . /kobuki/install/setup.bash && \
   rosdep install -i --from-path src --rosdistro humble -y
 
 # Build the workspace
 RUN . /opt/ros/humble/setup.sh && \
+  . /kobuki/install/setup.bash && \
   colcon build --symlink-install
 
 # Set the entrypoint to source the workspace and run the node
