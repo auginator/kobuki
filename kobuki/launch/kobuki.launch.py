@@ -13,7 +13,8 @@ def generate_launch_description():
     ## Start the kobuki node to establish connectivity with robot
 
     kobuki_node_launch    = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('kobuki_node'), 'launch', 'kobuki_node_mux.launch.py'))
+        PythonLaunchDescriptionSource(os.path.join(get_package_share_directory('kobuki_node'), 'launch', 'kobuki_node_mux.launch.py')),
+        launch_arguments={'publish_tf': 'true'}.items()
     )
 
     ## Start the joystick keyop to establish connectivity with joystick controller
