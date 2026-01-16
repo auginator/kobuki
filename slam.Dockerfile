@@ -34,14 +34,14 @@ RUN mkdir -p src && \
 COPY slam src/slam
 
 # Install dependencies for the cloned package
-RUN . /opt/ros/humble/setup.sh && \
-  . /kobuki/install/setup.bash && \
-  rosdep install -i --from-path src --rosdistro humble -y
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && \
+  source /kobuki/install/setup.bash && \
+  rosdep install -i --from-path src --rosdistro humble -y"
 
 # Build the workspace
-RUN . /opt/ros/humble/setup.sh && \
-  . /kobuki/install/setup.bash && \
-  colcon build --symlink-install
+RUN /bin/bash -c "source /opt/ros/humble/setup.bash && \
+  source /kobuki/install/setup.bash && \
+  colcon build --symlink-install"
 
 # Set the entrypoint to source the workspace and run the node
 CMD ["/bin/bash", "-c", ". /opt/ros/humble/setup.sh && . /kobuki/install/setup.bash && . ./install/setup.bash && ros2 launch slam sllidar_with_transform.launch.py"]
