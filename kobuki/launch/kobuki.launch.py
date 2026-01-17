@@ -10,7 +10,18 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
-    ## Robot Description (URDF) - provides static transforms for base_link and all robot links
+    ## Static transform: base_footprint -> base_link (10.2mm vertical offset)
+    # Note: The URDF has this backwards (base_link->base_footprint), but since kobuki_node
+    # publishes odom->base_footprint, we need the correct direction here
+    base_footprint_to_base_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_footprint_to_base_link',
+        arguments=['0', '0', '0.0102', '0', '0', '0', 'base_footprint', 'base_link'],
+        output='screen'
+    )
+
+    ## Robot Description (URDF) - provides static transforms for sensor/wheel links
     robot_description_param = {
         'robot_description': Command(['xacro ', PathJoinSubstitution(
             [FindPackageShare('kobuki_description'), 'urdf', 'kobuki_standalone.urdf.xacro']
@@ -21,7 +32,7 @@ def generate_launch_description():
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
-        parameters=[robot_description_param]
+        parameters=[robot_description_param, {'publish_root_tf': False}]  # Don't publish base_link->base_footprint
     )
 
     ## Start the kobuki node to establish connectivity with robot
@@ -45,6 +56,7 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
+    ld.add_action(base_footprint_to_base_link)
     ld.add_action(robot_state_publisher)
     ld.add_action(kobuki_node_launch)
     ld.add_action(kobuki_joyop_launch)
