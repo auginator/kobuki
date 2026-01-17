@@ -9,6 +9,17 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
+    # Static transform: base_footprint -> base_link (10.2mm vertical offset)
+    # Needed because kobuki_node publishes odom->base_footprint, but the URDF
+    # has base_link->base_footprint (backwards). We publish the correct direction.
+    base_footprint_to_base_link = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_footprint_to_base_link',
+        arguments=['0', '0', '0.0102', '0', '0', '0', 'base_footprint', 'base_link'],
+        output='screen'
+    )
+
     # Include the original kobuki_node launch file
     kobuki_node_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -31,6 +42,7 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
+    ld.add_action(base_footprint_to_base_link)
     ld.add_action(kobuki_node_launch)
     ld.add_action(kobuki_description_launch)
 
