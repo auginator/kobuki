@@ -16,9 +16,10 @@ services:
       - CYCLONEDDS_URI=file:///cyclonedds.xml
     volumes:
       - ./cyclonedds.xml:/cyclonedds.xml
+      - /dev:/dev # Testing if this solves the issue wit kobuki base not being recognized.
     privileged: true
-    devices:
-      - /dev/kobuki:/dev/kobuki
+    # devices:
+    #   - /dev/kobuki:/dev/kobuki
 
   lidar_node:
     build:
