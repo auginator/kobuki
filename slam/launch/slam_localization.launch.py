@@ -36,28 +36,13 @@ def launch_setup(context, *args, **kwargs):
         print("No map file specified. Running interactive map selector...")
         print("="*70)
 
-        # Run the map selector script (installed to lib directory)
-        # slam_pkg_dir is /ros2_ws/install/slam/share/slam
-        # We need to go to /ros2_ws/install/slam/lib/slam
-        install_dir = os.path.dirname(os.path.dirname(slam_pkg_dir))  # Go up to /ros2_ws/install/slam
-        selector_script = os.path.join(install_dir, 'lib', 'slam', 'map_selector.py')
+        # Run the map selector script
+        selector_script = os.path.join(slam_pkg_dir, 'scripts', 'map_selector.py')
 
         try:
             result = subprocess.run(
                 ['python3', selector_script],
-                capture_output=False,  # Allow interactive input
-                text=True,
-                check=True
-            )
-
-            # The script will have printed the map file to stdout
-            # Since we're not capturing output, we need to run it differently
-            # Let's capture only the last line which contains MAP_FILE=
-            result = subprocess.run(
-                ['python3', selector_script],
-                stdin=sys.stdin,
-                stdout=subprocess.PIPE,
-                stderr=sys.stderr,
+                capture_output=True,
                 text=True,
                 check=True
             )
