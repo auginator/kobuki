@@ -15,9 +15,7 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         name='base_footprint_to_base_link',
-        arguments=['--x', '0', '--y', '0', '--z', '0.0102',
-                   '--roll', '0', '--pitch', '0', '--yaw', '0',
-                   '--frame-id', 'base_footprint', '--child-frame-id', 'base_link'],
+        arguments=['0', '0', '0.0102', '0', '0', '0', 'base_footprint', 'base_link'],
         output='screen'
     )
 
