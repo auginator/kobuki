@@ -37,9 +37,10 @@ def launch_setup(context, *args, **kwargs):
         print("="*70)
 
         # Run the map selector script (installed to lib directory)
-        # Get the lib directory path instead of share
-        lib_dir = os.path.join(os.path.dirname(slam_pkg_dir), 'lib', 'slam')
-        selector_script = os.path.join(lib_dir, 'map_selector.py')
+        # slam_pkg_dir is /ros2_ws/install/slam/share/slam
+        # We need to go to /ros2_ws/install/slam/lib/slam
+        install_dir = os.path.dirname(os.path.dirname(slam_pkg_dir))  # Go up to /ros2_ws/install/slam
+        selector_script = os.path.join(install_dir, 'lib', 'slam', 'map_selector.py')
 
         try:
             result = subprocess.run(
