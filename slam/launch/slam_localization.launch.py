@@ -36,8 +36,10 @@ def launch_setup(context, *args, **kwargs):
         print("No map file specified. Running interactive map selector...")
         print("="*70)
 
-        # Run the map selector script
-        selector_script = os.path.join(slam_pkg_dir, 'scripts', 'map_selector.py')
+        # Run the map selector script (installed to lib directory)
+        # Get the lib directory path instead of share
+        lib_dir = os.path.join(os.path.dirname(slam_pkg_dir), 'lib', 'slam')
+        selector_script = os.path.join(lib_dir, 'map_selector.py')
 
         try:
             result = subprocess.run(
