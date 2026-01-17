@@ -11,28 +11,31 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
 
     ## Static transform: base_footprint -> base_link (10.2mm vertical offset)
-    # Note: The URDF has this backwards (base_link->base_footprint), but since kobuki_node
-    # publishes odom->base_footprint, we need the correct direction here
     base_footprint_to_base_link = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         name='base_footprint_to_base_link',
-        arguments=['0', '0', '0.0102', '0', '0', '0', 'base_footprint', 'base_link'],
+        arguments=['--x', '0', '--y', '0', '--z', '0.0102',
+                   '--roll', '0', '--pitch', '0', '--yaw', '0',
+                   '--frame-id', 'base_footprint', '--child-frame-id', 'base_link'],
         output='screen'
     )
 
-    ## Robot Description (URDF) - provides static transforms for sensor/wheel links
+    ## Robot Description (URDF) - load but robot_state_publisher will start from base_link
     robot_description_param = {
         'robot_description': Command(['xacro ', PathJoinSubstitution(
             [FindPackageShare('kobuki_description'), 'urdf', 'kobuki_standalone.urdf.xacro']
         )])}
 
+    # Robot state publisher will publish all links connected to base_link
+    # It will try to publish base_link->base_footprint but this will be ignored since
+    # base_footprint already has a parent (odom from kobuki_node)
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
-        parameters=[robot_description_param, {'publish_root_tf': False}]  # Don't publish base_link->base_footprint
+        parameters=[robot_description_param]
     )
 
     ## Start the kobuki node to establish connectivity with robot

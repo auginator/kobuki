@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot name="kobuki_standalone"
+       xmlns:sensor="http://playerstage.sourceforge.net/gazebo/xmlschema/#sensor"
+       xmlns:controller="http://playerstage.sourceforge.net/gazebo/xmlschema/#controller"
+       xmlns:interface="http://playerstage.sourceforge.net/gazebo/xmlschema/#interface"
+       xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!--
+    Custom Kobuki URDF that starts from base_link instead of base_footprint
+    This avoids conflicts with kobuki_node which publishes odom->base_footprint
+    and our static_transform_publisher which publishes base_footprint->base_link
+  -->
+
+  <!-- Include common properties -->
+  <xacro:include filename="$(find kobuki_description)/urdf/common_properties.urdf.xacro"/>
+
+  <!-- We manually include the base_link and all child links from kobuki.urdf.xacro
+       but SKIP the base_footprint link and base_joint to avoid conflicts -->
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="file://$(find kobuki_description)/meshes/main_body.dae" />
+      </geometry>
+      <origin xyz="0.001 0 0.05199" rpy="0 0 0"/>
+    </visual>
+    <collision name="base">
+      <geometry>
+        <cylinder length="0.10938" radius="0.178"/>
+      </geometry>
+      <origin xyz="0.0 0 0.05949" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <origin xyz="0.01 0 0"/>
+      <mass value="2.4"/>
+      <inertia ixx="0.019995" ixy="0.0" ixz="0.0"
+               iyy="0.019995" iyz="0.0"
+               izz="0.03675" />
+    </inertial>
+  </link>
+
+  <!-- Include the full kobuki macro but we'll only use the components -->
+  <xacro:include filename="$(find kobuki_description)/urdf/kobuki.urdf.xacro" />
+  <xacro:kobuki/>
+
+</robot>
