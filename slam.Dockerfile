@@ -24,6 +24,8 @@ RUN apt-get update && \
   apt-get install -y ros-humble-robot-state-publisher && \
   apt-get install -y ros-humble-foxglove-bridge && \
   apt-get install -y ros-humble-slam-toolbox && \
+  apt-get install -y ros-humble-teleop-twist-joy && \
+  apt-get install -y ros-humble-joy && \
   rm -rf /var/lib/apt/lists/*
 
 # Clone the Slamtec Lidar ROS2 driver into the src directory
