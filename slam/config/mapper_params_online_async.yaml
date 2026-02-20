@@ -21,7 +21,9 @@ slam_toolbox:
 
     # Mapping params
     resolution: 0.05
-    max_laser_range: 12.0  # For Slamtec LIDAR, adjust based on your model
+    # For Slamtec LIDAR, adjust based on your model
+    min_laser_range: 0.1
+    max_laser_range: 12.0
     minimum_time_interval: 0.5
     transform_publish_period: 0.02
     map_update_interval: 5.0
