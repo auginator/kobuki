@@ -23,6 +23,7 @@ def generate_launch_description():
             executable='teleop_node',
             name='teleop_twist_joy_node',
             parameters=[config],
-            remappings=[('cmd_vel', 'cmd_vel')]  # adjust if your topic differs
+            # No remappings needed, default configuration(below) is fine
+            # remappings=[('cmd_vel', 'cmd_vel')]
         ),
     ])

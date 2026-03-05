@@ -10,5 +10,5 @@ teleop_twist_joy_node:
       yaw: 0      # Left stick horizontal
     scale_angular:
       yaw: 0.5    # Turning rate (rad/s)
-    enable_button: 4      # L1 - must hold to move (safety!)
-    enable_turbo_button: 5 # R1 - hold for turbo
+    enable_button: 9      # L1 - must hold to move (safety!)
+    enable_turbo_button: 10 # R1 - hold for turbo
