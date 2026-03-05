@@ -1,0 +1,14 @@
+teleop_twist_joy_node:
+  ros__parameters:
+    axis_linear:
+      x: 1        # Left stick vertical
+    scale_linear:
+      x: 0.3      # Max forward speed (m/s) - start conservative!
+    scale_linear_turbo:
+      x: 0.6      # Turbo speed when holding enable button
+    axis_angular:
+      yaw: 0      # Left stick horizontal
+    scale_angular:
+      yaw: 0.5    # Turning rate (rad/s)
+    enable_button: 4      # L1 - must hold to move (safety!)
+    enable_turbo_button: 5 # R1 - hold for turbo
