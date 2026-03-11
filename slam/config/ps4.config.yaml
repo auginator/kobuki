@@ -1,14 +1,50 @@
+# ps4.config.yaml
+# PS4 DualShock 4 - verified mapping for Linux (Ubuntu 24 / Raspberry Pi 5)
+#
+# Key findings:
+#   - L2/R2 are exposed as analog axes by this kernel, shifting all button indices
+#   - L1 = button 9 (not 4 as per standard docs)
+#   - R1 = button 10 (not 5 as per standard docs)
+#   - Right stick Y = axis 3 (not 4 as per standard docs)
+#
+# Axes:
+#   0 = Left stick X
+#   1 = Left stick Y
+#   2 = Right stick X
+#   3 = Right stick Y
+#   4 = L2 analog (1.0 at rest -> -1.0 fully pressed)
+#   5 = R2 analog (1.0 at rest -> -1.0 fully pressed)
+#
+# Buttons:
+#   0  = Cross (X)
+#   1  = Circle
+#   2  = Square
+#   3  = Triangle
+#   4  = (unassigned / shifted)
+#   5  = (unassigned / shifted)
+#   6  = (unassigned / shifted)
+#   7  = (unassigned / shifted)
+#   8  = (unassigned / shifted)
+#   9  = L1
+#   10 = R1
+#   ...
+#
+# Usage:
+#   - Hold L1 + move left stick to drive at normal speed
+#   - Hold R1 + move left stick for turbo speed
+#   - Release enable button to stop (safety feature)
+
 teleop_twist_joy_node:
   ros__parameters:
     axis_linear:
-      x: 1        # Left stick vertical
+      x: 1                    # Left stick vertical
     scale_linear:
-      x: 0.3      # Max forward speed (m/s) - start conservative!
+      x: 0.3                  # Normal speed m/s - conservative for mapping sessions
     scale_linear_turbo:
-      x: 0.6      # Turbo speed when holding enable button
+      x: 0.6                  # Turbo speed m/s
     axis_angular:
-      yaw: 0      # Left stick horizontal
+      yaw: 0                  # Left stick horizontal
     scale_angular:
-      yaw: 0.5    # Turning rate (rad/s)
-    enable_button: 9      # L1 - must hold to move (safety!)
-    enable_turbo_button: 10 # R1 - hold for turbo
+      yaw: 0.5                # Turn rate rad/s
+    enable_button: 9          # L1 - must hold to publish velocity commands
+    enable_turbo_button: 10   # R1 - hold for turbo speed

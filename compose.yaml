@@ -38,20 +38,8 @@ services:
     privileged: true
     devices:
       - /dev/rplidar:/dev/rplidar
-  # lidar_node:
-  #   build:
-  #     context: .
-  #     dockerfile: lidar.Dockerfile
-  #   networks:
-  #     - ros_network
-  #   environment:
-  #     - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-  #     - CYCLONEDDS_URI=file:///cyclonedds.xml
-  #   volumes:
-  #     - ./cyclonedds.xml:/cyclonedds.xml
-  #   privileged: true
-  #   devices:
-  #     - /dev/rplidar:/dev/rplidar
+      - /dev/input/js0:/dev/input/js0
+      - /dev/kobuki:/dev/kobuki
 
 networks:
   ros_network:
