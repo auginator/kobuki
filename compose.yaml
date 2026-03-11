@@ -1,21 +1,31 @@
-# This docker-compose file sets up two services: kobuki and lidar_node.
+# This docker-compose file sets up three services: zenoh_router, kobuki, and lidar_node.
 # The kobuki service runs the Kobuki robot base, while the lidar_node service runs
-# the SLAMTEC LIDAR node. Both services are connected to a custom Docker network
-# named ros_network to facilitate communication between them.
+# the SLAMTEC LIDAR node. Both connect to a Zenoh router for ROS 2 middleware
+# communication over a custom Docker network named ros_network.
 services:
+  zenoh_router:
+    image: eclipse/zenoh:latest
+    networks:
+      - ros_network
+    volumes:
+      - ./zenoh_router_config.json5:/zenoh_router_config.json5
+    command: ["--config", "/zenoh_router_config.json5"]
+    restart: unless-stopped
   kobuki:
     image: crl/kobuki-bringup:humble
     build:
       context: .
       dockerfile: bringup.Dockerfile
     restart: unless-stopped
+    depends_on:
+      - zenoh_router
     networks:
       - ros_network
     environment:
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-      - CYCLONEDDS_URI=file:///cyclonedds.xml
+      - RMW_IMPLEMENTATION=rmw_zenoh_cpp
+      - ZENOH_SESSION_CONFIG_URI=/zenoh_config.json5
     volumes:
-      - ./cyclonedds.xml:/cyclonedds.xml
+      - ./zenoh_config.json5:/zenoh_config.json5
       - /dev:/dev # Testing if this solves the issue wit kobuki base not being recognized.
     privileged: true
     # devices:
@@ -25,15 +35,17 @@ services:
     build:
       context: .
       dockerfile: slam.Dockerfile
+    depends_on:
+      - zenoh_router
     networks:
       - ros_network
     ports:
       - "8765:8765"
     environment:
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-      - CYCLONEDDS_URI=file:///cyclonedds.xml
+      - RMW_IMPLEMENTATION=rmw_zenoh_cpp
+      - ZENOH_SESSION_CONFIG_URI=/zenoh_config.json5
     volumes:
-      - ./cyclonedds.xml:/cyclonedds.xml
+      - ./zenoh_config.json5:/zenoh_config.json5
       - ./maps:/ros2_ws/maps
     privileged: true
     devices:
