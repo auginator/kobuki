@@ -18,7 +18,7 @@ WORKDIR /ros2_ws
 RUN apt-get update && \
   apt-get install -y software-properties-common && \
   add-apt-repository universe && \
-  apt-get install -y ros-humble-rmw-cyclonedds-cpp && \
+  apt-get install -y ros-humble-rmw-zenoh-cpp && \
   apt-get install -y ros-humble-xacro && \
   apt-get install -y ros-humble-joint-state-publisher && \
   apt-get install -y ros-humble-robot-state-publisher && \

@@ -9,11 +9,16 @@ WORKDIR /kobuki/src
 # Copy the augs_bringup package
 COPY augs_bringup augs_bringup
 
+RUN apt-get update && \
+  apt-get install -y software-properties-common && \
+  add-apt-repository universe && \
+  apt-get install -y ros-humble-rmw-zenoh-cpp
+
 # Build the new package
 WORKDIR /kobuki
 RUN . /opt/ros/humble/setup.sh && \
-    . /kobuki/install/setup.sh && \
-    colcon build --packages-select augs_bringup --symlink-install
+  . /kobuki/install/setup.sh && \
+  colcon build --packages-select augs_bringup --symlink-install
 
 # Clean up
 RUN rm -rf /kobuki/log

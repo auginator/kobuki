@@ -18,7 +18,7 @@ WORKDIR /ros2_ws
 RUN apt-get update && \
   apt-get install -y software-properties-common && \
   add-apt-repository universe && \
-  apt-get install -y ros-humble-rmw-cyclonedds-cpp && \
+  apt-get install -y ros-humble-rmw-zenoh-cpp && \
   rm -rf /var/lib/apt/lists/*
 
 # Clone the Slamtec Lidar ROS2 driver into the src directory
