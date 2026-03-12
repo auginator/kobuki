@@ -17,6 +17,7 @@ services:
       context: .
       dockerfile: bringup.Dockerfile
     restart: unless-stopped
+    shm_size: '512m'
     depends_on:
       - zenoh_router
     networks:
@@ -35,6 +36,7 @@ services:
     build:
       context: .
       dockerfile: slam.Dockerfile
+    shm_size: '512m'
     depends_on:
       - zenoh_router
     networks:
