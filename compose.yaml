@@ -17,7 +17,7 @@ services:
       context: .
       dockerfile: bringup.Dockerfile
     restart: unless-stopped
-    shm_size: '512m'
+    shm_size: "512m"
     depends_on:
       - zenoh_router
     networks:
@@ -36,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: slam.Dockerfile
-    shm_size: '512m'
+    shm_size: "512m"
     depends_on:
       - zenoh_router
     networks:
@@ -54,6 +54,43 @@ services:
       - /dev/rplidar:/dev/rplidar
       - /dev/input/js0:/dev/input/js0
       - /dev/kobuki:/dev/kobuki
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator.Dockerfile
+    shm_size: "512m"
+    depends_on:
+      - zenoh_router
+      - kobuki
+    container_name: kobuki_orchestrator
+    restart: unless-stopped
+    networks:
+      - ros_network
+    privileged: false
+    environment:
+      - RMW_IMPLEMENTATION=rmw_zenoh_cpp
+      - ZENOH_SESSION_CONFIG_URI=/zenoh_config.json5
+      - ROS_DOMAIN_ID=0 # match your other containers
+      - ROS_WS=/ros_ws
+      - MAPPING_LAUNCH_PKG=slam
+      - MAPPING_LAUNCH_FILE=slam_mapping.launch.py
+      - LOCALIZATION_LAUNCH_PKG=slam
+      - LOCALIZATION_LAUNCH_FILE=slam_localization.launch.py
+      - NAV2_LAUNCH_PKG=nav2_bringup
+      - NAV2_LAUNCH_FILE=navigation_launch.py
+    volumes:
+      - ./zenoh_config.json5:/zenoh_config.json5
+      # Live-edit the orchestrator without rebuilding
+      # - ./robot_orchestrator.py:/robot_orchestrator.py:ro
+      # Shared maps directory — all containers see the same maps
+      - ./maps:/ros2_ws/maps
+    ports:
+      - "8080:8080" # HTTP API — accessible from Mac browser / curl
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 networks:
   ros_network:
