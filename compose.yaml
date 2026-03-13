@@ -71,19 +71,21 @@ services:
       - RMW_IMPLEMENTATION=rmw_zenoh_cpp
       - ZENOH_SESSION_CONFIG_URI=/zenoh_config.json5
       - ROS_DOMAIN_ID=0 # match your other containers
-      - ROS_WS=/ros_ws
+      - ROS_WS=/ros2_ws
       - MAPPING_LAUNCH_PKG=slam
       - MAPPING_LAUNCH_FILE=slam_mapping.launch.py
       - LOCALIZATION_LAUNCH_PKG=slam
       - LOCALIZATION_LAUNCH_FILE=slam_localization.launch.py
       - NAV2_LAUNCH_PKG=nav2_bringup
       - NAV2_LAUNCH_FILE=navigation_launch.py
+      - NAV2_PARAMS_FILE=/nav2_config/nav2_params.yaml
     volumes:
       - ./zenoh_config.json5:/zenoh_config.json5
       # Live-edit the orchestrator without rebuilding
       # - ./robot_orchestrator.py:/robot_orchestrator.py:ro
       # Shared maps directory — all containers see the same maps
       - ./maps:/ros2_ws/maps
+      - ./slam/config:/nav2_config:ro
     ports:
       - "8080:8080" # HTTP API — accessible from Mac browser / curl
     healthcheck:

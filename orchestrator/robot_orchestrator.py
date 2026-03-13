@@ -60,9 +60,10 @@ LOCALIZATION_LAUNCH_FILE = os.environ.get(
     "LOCALIZATION_LAUNCH_FILE", "slam_localization.launch.py")
 NAV2_LAUNCH_PKG = os.environ.get("NAV2_LAUNCH_PKG", "nav2_bringup")
 NAV2_LAUNCH_FILE = os.environ.get("NAV2_LAUNCH_FILE", "navigation_launch.py")
+NAV2_PARAMS_FILE = os.environ.get("NAV2_PARAMS_FILE", "/nav2_config/nav2_params.yaml")
 
 FIXED_FRAME = "map"
-BASE_FRAME = "base_link"
+BASE_FRAME = "base_footprint"
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -557,12 +558,21 @@ def start_autonomy():
         raise HTTPException(
             409, "Localization stack is not running. Call /localization/start first.")
 
-    map_yaml = MAPS_DIR / \
-        f"{state.active_map}.yaml" if state.active_map else None
-    extra_args = [f"map:={map_yaml}"] if map_yaml and map_yaml.exists() else []
+    # Build launch args
+    extra_args = []
 
-    state._ros2_launch("nav2", NAV2_LAUNCH_PKG,
-                       NAV2_LAUNCH_FILE, extra_args=extra_args)
+    params_file = Path(NAV2_PARAMS_FILE)
+    if params_file.exists():
+        extra_args.append(f"params_file:={params_file}")
+        log.info("Using Nav2 params file: %s", params_file)
+    else:
+        log.warning("Nav2 params file not found at %s — using Nav2 defaults (not tuned for Kobuki)", params_file)
+
+    map_yaml = MAPS_DIR / f"{state.active_map}.yaml" if state.active_map else None
+    if map_yaml and map_yaml.exists():
+        extra_args.append(f"map:={map_yaml}")
+
+    state._ros2_launch("nav2", NAV2_LAUNCH_PKG, NAV2_LAUNCH_FILE, extra_args=extra_args)
     state.mode = RobotMode.AUTONOMOUS
     return {"status": "autonomy stack started", "map": state.active_map}
 

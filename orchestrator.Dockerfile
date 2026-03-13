@@ -5,6 +5,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   python3-pip \
   ros-humble-nav2-msgs \
   ros-humble-nav2-bringup \
+  ros-humble-nav2-core \
+  ros-humble-nav2-costmap-2d \
+  ros-humble-nav2-controller \
+  ros-humble-nav2-planner \
+  ros-humble-nav2-behaviors \
+  ros-humble-nav2-bt-navigator \
+  ros-humble-nav2-waypoint-follower \
+  ros-humble-nav2-velocity-smoother \
+  ros-humble-nav2-lifecycle-manager \
+  ros-humble-nav2-regulated-pure-pursuit-controller \
+  ros-humble-nav2-navfn-planner \
+  ros-humble-nav2-map-server \
   ros-humble-slam-toolbox \
   ros-humble-kobuki-ros-interfaces \
   ros-humble-rmw-zenoh-cpp \
