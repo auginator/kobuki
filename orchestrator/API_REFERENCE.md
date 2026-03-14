@@ -102,21 +102,27 @@ POST /mapping/stop   {"name": "living_room"}
 ## Robot Modes (state machine)
 
 ```
-         /mapping/start
+         /mapping/start (from any state except MAPPING)
 IDLE ─────────────────────► MAPPING
   ▲                              │
   │         /mapping/stop        │
   │◄─────────────────────────────┘
   │
-  │   /localization/start
+  │   /localization/start (from any state — kills mapping & nav2)
   ├───────────────────────► LOCALIZING
   │                              │
-  │       /autonomy/start        │
+  │  /autonomy/start             │
+  │  (from LOCALIZING or IDLE)   │
   │                              ▼
   │                         AUTONOMOUS
-  │                              │
-  │       /dock/return           │
-  │                              ▼
+  │    /autonomy/stop            │ │
+  │    ┌─────────────────────────┘ │
+  │    ▼                           │
+  │  LOCALIZING (if still running) │
+  │  or IDLE (otherwise)           │
+  │                                │
+  │       /dock/return             │
+  │                                ▼
   │◄──────────────── RETURNING_TO_DOCK
   │
   │   /estop (from any state)

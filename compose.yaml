@@ -80,7 +80,7 @@ services:
       - NAV2_LAUNCH_FILE=navigation_launch.py
       - NAV2_PARAMS_FILE=/nav2_config/nav2_params.yaml
     volumes:
-      - ./zenoh_config.json5:/zenoh_config.json5
+      - ./zenoh_config_no_shm.json5:/zenoh_config.json5
       # Live-edit the orchestrator without rebuilding
       # - ./robot_orchestrator.py:/robot_orchestrator.py:ro
       # Shared maps directory — all containers see the same maps
