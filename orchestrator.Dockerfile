@@ -1,5 +1,7 @@
 FROM ros:humble-ros-base
 
+WORKDIR /ros2_ws
+
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
   python3-pip \
@@ -25,8 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir fastapi uvicorn[standard] pydantic
-
-WORKDIR /ros2_ws
 
 # Your custom packages (slam, bringup, etc.) should be built and
 # installed into this workspace by your CI / compose build step.
