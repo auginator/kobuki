@@ -187,21 +187,29 @@ class OrchestratorNode(Node):
         return result
 
     def launch_stop(self, key: str):
-        """Stop a launch file on the remote launch agent."""
+        """Stop a launch file on the remote launch agent. No-op if agent unreachable."""
         req = LaunchStop.Request()
         req.key = key
         log.info("Requesting launch agent stop: [%s]", key)
-        result = self._call_service(self._launch_stop_client, req, timeout=15.0)
+        try:
+            result = self._call_service(self._launch_stop_client, req, timeout=15.0)
+        except RuntimeError as e:
+            log.warning("Launch agent unreachable for stop [%s]: %s", key, e)
+            return None
         if not result.success:
             raise RuntimeError(f"Launch agent stop failed: {result.message}")
         log.info("Launch agent stopped [%s]: %s", key, result.message)
         return result
 
     def launch_running(self, key: str) -> bool:
-        """Check if a launch key is running on the remote launch agent."""
+        """Check if a launch key is running. Returns False if agent unreachable."""
         req = LaunchStatus.Request()
         req.key = key
-        result = self._call_service(self._launch_status_client, req, timeout=5.0)
+        try:
+            result = self._call_service(self._launch_status_client, req, timeout=5.0)
+        except RuntimeError:
+            log.warning("Launch agent unreachable for status check [%s]", key)
+            return False
         for i, k in enumerate(result.keys):
             if k == key:
                 return result.running[i]
