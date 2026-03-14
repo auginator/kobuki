@@ -112,8 +112,6 @@ class RobotState:
         log.info("Starting [%s]: %s", key, " ".join(cmd))
         proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
             preexec_fn=os.setsid,   # allows killing the entire process group
         )
         self._processes[key] = proc
