@@ -74,6 +74,29 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("orchestrator")
 
 
+class RosoutHandler(logging.Handler):
+    """Forward Python log records to the ROS2 node logger (/rosout)."""
+
+    def __init__(self, ros_node_ref):
+        super().__init__()
+        self._ros_node = ros_node_ref
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            logger = self._ros_node.get_logger()
+            if record.levelno >= logging.ERROR:
+                logger.error(msg)
+            elif record.levelno >= logging.WARNING:
+                logger.warn(msg)
+            elif record.levelno >= logging.INFO:
+                logger.info(msg)
+            else:
+                logger.debug(msg)
+        except Exception:
+            self.handleError(record)
+
+
 # ---------------------------------------------------------------------------
 # Robot state
 # ---------------------------------------------------------------------------
@@ -271,10 +294,14 @@ async def lifespan(app: FastAPI):
     _ros_thread.start()
     log.info("ROS2 node spinning")
 
+    rosout_handler = RosoutHandler(ros_node)
+    log.addHandler(rosout_handler)
+
     yield
 
     # Shutdown
     log.info("Shutting down orchestrator")
+    log.removeHandler(rosout_handler)
     state.kill_all()
     rclpy.shutdown()
 
