@@ -60,7 +60,11 @@ LOCALIZATION_LAUNCH_FILE = os.environ.get(
     "LOCALIZATION_LAUNCH_FILE", "slam_localization.launch.py")
 NAV2_LAUNCH_PKG = os.environ.get("NAV2_LAUNCH_PKG", "nav2_bringup")
 NAV2_LAUNCH_FILE = os.environ.get("NAV2_LAUNCH_FILE", "navigation_launch.py")
-NAV2_PARAMS_FILE = os.environ.get("NAV2_PARAMS_FILE", "/nav2_config/nav2_params.yaml")
+NAV2_PARAMS_FILE = os.environ.get(
+    "NAV2_PARAMS_FILE", "/nav2_config/nav2_params.yaml")
+JOYSTICK_LAUNCH_PKG = os.environ.get("JOYSTICK_LAUNCH_PKG", "slam")
+JOYSTICK_LAUNCH_FILE = os.environ.get(
+    "JOYSTICK_LAUNCH_FILE", "joy_teleop.launch.py")
 
 FIXED_FRAME = "map"
 BASE_FRAME = "base_footprint"
@@ -566,13 +570,16 @@ def start_autonomy():
         extra_args.append(f"params_file:={params_file}")
         log.info("Using Nav2 params file: %s", params_file)
     else:
-        log.warning("Nav2 params file not found at %s — using Nav2 defaults (not tuned for Kobuki)", params_file)
+        log.warning(
+            "Nav2 params file not found at %s — using Nav2 defaults (not tuned for Kobuki)", params_file)
 
-    map_yaml = MAPS_DIR / f"{state.active_map}.yaml" if state.active_map else None
+    map_yaml = MAPS_DIR / \
+        f"{state.active_map}.yaml" if state.active_map else None
     if map_yaml and map_yaml.exists():
         extra_args.append(f"map:={map_yaml}")
 
-    state._ros2_launch("nav2", NAV2_LAUNCH_PKG, NAV2_LAUNCH_FILE, extra_args=extra_args)
+    state._ros2_launch("nav2", NAV2_LAUNCH_PKG,
+                       NAV2_LAUNCH_FILE, extra_args=extra_args)
     state.mode = RobotMode.AUTONOMOUS
     return {"status": "autonomy stack started", "map": state.active_map}
 
@@ -594,6 +601,51 @@ def stop_autonomy():
     else:
         state.mode = RobotMode.IDLE
     return {"status": "autonomy stopped"}
+
+
+# ---------------------------------------------------------------------------
+# Routes — Joystick
+# ---------------------------------------------------------------------------
+
+@app.post("/joystick/start", tags=["Joystick"])
+def start_joystick():
+    """
+    Start joystick teleoperation as an overlay control process.
+    This does not change the robot mode state machine.
+    """
+    if state.process_running("joystick"):
+        raise HTTPException(409, "Joystick control is already running")
+
+    try:
+        state._ros2_launch("joystick", JOYSTICK_LAUNCH_PKG,
+                           JOYSTICK_LAUNCH_FILE)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to start joystick control: {e}")
+
+    return {
+        "status": "joystick control started",
+        "launch": f"{JOYSTICK_LAUNCH_PKG}/{JOYSTICK_LAUNCH_FILE}",
+        "mode": state.mode.value,
+    }
+
+
+@app.post("/joystick/stop", tags=["Joystick"])
+def stop_joystick():
+    """
+    Stop joystick teleoperation overlay process.
+    This endpoint is idempotent and does not change robot mode.
+    """
+    if not state.process_running("joystick"):
+        return {
+            "status": "joystick control already stopped",
+            "mode": state.mode.value,
+        }
+
+    state._kill("joystick")
+    return {
+        "status": "joystick control stopped",
+        "mode": state.mode.value,
+    }
 
 
 # ---------------------------------------------------------------------------

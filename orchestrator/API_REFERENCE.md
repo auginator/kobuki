@@ -14,6 +14,19 @@ Interactive docs: `http://<pi-ip>:8080/docs`  (Swagger UI, auto-generated)
 
 ---
 
+## Joystick
+
+| Method | Endpoint        | Description                                                |
+|--------|-----------------|------------------------------------------------------------|
+| POST   | /joystick/start | Start joystick teleop launch (overlay process, no mode change) |
+| POST   | /joystick/stop  | Stop joystick teleop launch (idempotent, no mode change) |
+
+Launch behavior:
+- `/joystick/start` uses package/file launch form through the orchestrator helper: `ros2 launch slam joy_teleop.launch.py`.
+- Launch target is configurable via `JOYSTICK_LAUNCH_PKG` and `JOYSTICK_LAUNCH_FILE` environment variables.
+
+---
+
 ## Mapping
 
 | Method | Endpoint        | Body                  | Description                          |
@@ -101,6 +114,10 @@ POST /mapping/stop   {"name": "living_room"}
 
 ## Robot Modes (state machine)
 
+Joystick control is an overlay process. Calling `/joystick/start` or `/joystick/stop`
+does not transition the robot mode and can be used while in `IDLE`, `MAPPING`,
+`LOCALIZING`, or `AUTONOMOUS`.
+
 ```
          /mapping/start (from any state except MAPPING)
 IDLE ─────────────────────► MAPPING
@@ -137,10 +154,15 @@ IDLE ─────────────────────► MAPPING
 PI=192.168.1.100
 
 # 1. Map the environment
+#    Start joystick teleop overlay so the operator can drive.
+curl -X POST $PI:8080/joystick/start
 curl -X POST $PI:8080/mapping/start
 #    ... drive with teleop ...
 curl -X POST $PI:8080/mapping/stop -H 'Content-Type: application/json' \
      -d '{"name":"living_room"}'
+
+#    Stop joystick if no longer needed.
+curl -X POST $PI:8080/joystick/stop
 
 # 2. Define waypoints (or edit the JSON file directly)
 curl -X POST $PI:8080/annotations/save -H 'Content-Type: application/json' \
@@ -165,3 +187,7 @@ curl $PI:8080/status
 # 6. Go home
 curl -X POST $PI:8080/dock/return
 ```
+
+Notes:
+- Joystick control is implemented as an overlay process and does not transition robot mode.
+- `/status` includes process information so you can verify whether `joystick` is running.
