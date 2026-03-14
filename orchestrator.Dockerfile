@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip3 install --no-cache-dir fastapi uvicorn[standard] pydantic
 
-WORKDIR /ros_ws
+WORKDIR /ros2_ws
 
 # Your custom packages (slam, bringup, etc.) should be built and
 # installed into this workspace by your CI / compose build step.
