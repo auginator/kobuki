@@ -1,0 +1,5 @@
+string key
+---
+string[] keys
+bool[] running
+int32[] pids

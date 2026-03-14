@@ -32,7 +32,8 @@ RUN apt-get update && \
 RUN mkdir -p src && \
   git clone https://github.com/slamtec/sllidar_ros2.git src/sllidar_ros2
 
-# Copy the slam package into the workspace
+# Copy packages into the workspace
+COPY launch_agent_interfaces src/launch_agent_interfaces
 COPY slam src/slam
 
 # Install dependencies for the cloned package
@@ -46,4 +47,4 @@ RUN /bin/bash -c "source /opt/ros/humble/setup.bash && \
   colcon build --symlink-install"
 
 # Set the entrypoint to source the workspace and run the node
-CMD ["/bin/bash", "-c", ". /opt/ros/humble/setup.sh && . /kobuki/install/setup.bash && . ./install/setup.bash && ros2 launch slam sllidar_with_transform.launch.py"]
+CMD ["/bin/bash", "-c", ". /opt/ros/humble/setup.sh && . /kobuki/install/setup.bash && . ./install/setup.bash && ros2 launch slam lidar_bringup.launch.py"]

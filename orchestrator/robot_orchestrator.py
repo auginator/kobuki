@@ -10,21 +10,16 @@ for the Kobuki robot platform. Exposes an HTTP API for:
   - Goal sending
   - Dock return
 
-Assumptions / conventions from the journal:
-  - ROS2 Humble on Ubuntu 24 / Raspberry Pi 5
-  - Your custom launch packages: 'slam' (slam_mapping.launch.py, slam_localization.launch.py)
-  - Nav2 bringup package for autonomy
-  - Maps stored under maps/ relative to ROS_WS
-  - Annotations stored as JSON files alongside maps
+Launch files are executed remotely via the launch_agent node running in the
+lidar_node container. The orchestrator communicates with it over ROS2 services
+(transported via Zenoh across the Docker network).
 
 Run this inside your Docker network where ROS_DOMAIN_ID is shared with other containers.
 """
 
-import asyncio
 import json
 import logging
 import os
-import signal
 import subprocess
 import time
 from contextlib import asynccontextmanager
@@ -35,12 +30,13 @@ from typing import Optional
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from launch_agent_interfaces.srv import LaunchStart, LaunchStop, LaunchStatus
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_srvs.srv import Empty
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -61,10 +57,13 @@ LOCALIZATION_LAUNCH_FILE = os.environ.get(
 NAV2_LAUNCH_PKG = os.environ.get("NAV2_LAUNCH_PKG", "nav2_bringup")
 NAV2_LAUNCH_FILE = os.environ.get("NAV2_LAUNCH_FILE", "navigation_launch.py")
 NAV2_PARAMS_FILE = os.environ.get(
-    "NAV2_PARAMS_FILE", "/nav2_config/nav2_params.yaml")
+    "NAV2_PARAMS_FILE", "/ros2_ws/install/slam/share/slam/config/nav2_params.yaml")
 JOYSTICK_LAUNCH_PKG = os.environ.get("JOYSTICK_LAUNCH_PKG", "slam")
 JOYSTICK_LAUNCH_FILE = os.environ.get(
     "JOYSTICK_LAUNCH_FILE", "joy_teleop.launch.py")
+
+# All known launch keys — used by kill_all / e-stop
+ALL_LAUNCH_KEYS = ["mapping", "localization", "nav2", "joystick"]
 
 FIXED_FRAME = "map"
 BASE_FRAME = "base_footprint"
@@ -114,53 +113,10 @@ class RobotState:
 
     def __init__(self):
         self.mode: RobotMode = RobotMode.IDLE
-        # stem name, e.g. "my_map"
         self.active_map: Optional[str] = None
-        self.active_annotations: Optional[str] = None  # annotation file path
-        self.annotations: dict = {}                    # loaded annotation data
+        self.active_annotations: Optional[str] = None
+        self.annotations: dict = {}
         self.current_goal_handle = None
-        self._processes: dict[str, subprocess.Popen] = {}
-
-    # ------------------------------------------------------------------
-    # Process management helpers
-    # ------------------------------------------------------------------
-
-    def _ros2_launch(self, key: str, pkg: str, launch_file: str, extra_args: list[str] = None) -> subprocess.Popen:
-        """
-        Spawn a ros2 launch subprocess and track it under `key`.
-        Any previously running process under that key is terminated first.
-        """
-        self._kill(key)
-        cmd = ["ros2", "launch", pkg, launch_file] + (extra_args or [])
-        log.info("Starting [%s]: %s", key, " ".join(cmd))
-        proc = subprocess.Popen(
-            cmd,
-            preexec_fn=os.setsid,   # allows killing the entire process group
-        )
-        self._processes[key] = proc
-        return proc
-
-    def _kill(self, key: str):
-        proc = self._processes.pop(key, None)
-        if proc and proc.poll() is None:
-            log.info("Terminating [%s] (pid %d)", key, proc.pid)
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                proc.wait(timeout=10)
-            except Exception as e:
-                log.warning("Error killing [%s]: %s", key, e)
-                try:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-                except Exception:
-                    pass
-
-    def kill_all(self):
-        for key in list(self._processes.keys()):
-            self._kill(key)
-
-    def process_running(self, key: str) -> bool:
-        proc = self._processes.get(key)
-        return proc is not None and proc.poll() is None
 
     def to_dict(self) -> dict:
         return {
@@ -168,8 +124,6 @@ class RobotState:
             "active_map": self.active_map,
             "active_annotations": self.active_annotations,
             "annotation_count": len(self.annotations.get("waypoints", [])),
-            "processes": {k: (proc.pid if proc.poll() is None else "dead")
-                          for k, proc in self._processes.items()},
         }
 
 
@@ -180,7 +134,7 @@ class RobotState:
 class OrchestratorNode(Node):
     """
     Thin ROS2 node used to call services and send actions.
-    Kept separate from process management so failures are isolated.
+    Launch file management is delegated to the launch_agent in lidar_node.
     """
 
     def __init__(self):
@@ -189,6 +143,15 @@ class OrchestratorNode(Node):
             self, NavigateToPose, "navigate_to_pose")
         self._clear_costmap_client = self.create_client(
             Empty, "/global_costmap/clear_entirely_global_costmap")
+
+        # Launch agent service clients
+        self._launch_start_client = self.create_client(
+            LaunchStart, "launch_agent/start")
+        self._launch_stop_client = self.create_client(
+            LaunchStop, "launch_agent/stop")
+        self._launch_status_client = self.create_client(
+            LaunchStatus, "launch_agent/status")
+
         self.get_logger().info("OrchestratorNode ready")
 
     # ------------------------------------------------------------------
@@ -203,6 +166,58 @@ class OrchestratorNode(Node):
         if future.result() is None:
             raise RuntimeError(f"Service call to {client.srv_name} failed")
         return future.result()
+
+    # ------------------------------------------------------------------
+    # Launch agent helpers
+    # ------------------------------------------------------------------
+
+    def launch_start(self, key: str, pkg: str, launch_file: str, extra_args: list[str] = None):
+        """Start a launch file on the remote launch agent."""
+        req = LaunchStart.Request()
+        req.key = key
+        req.launch_package = pkg
+        req.launch_file = launch_file
+        req.extra_args = extra_args or []
+        log.info("Requesting launch agent start: [%s] %s/%s %s",
+                 key, pkg, launch_file, req.extra_args)
+        result = self._call_service(self._launch_start_client, req, timeout=10.0)
+        if not result.success:
+            raise RuntimeError(f"Launch agent start failed: {result.message}")
+        log.info("Launch agent started [%s]: %s", key, result.message)
+        return result
+
+    def launch_stop(self, key: str):
+        """Stop a launch file on the remote launch agent."""
+        req = LaunchStop.Request()
+        req.key = key
+        log.info("Requesting launch agent stop: [%s]", key)
+        result = self._call_service(self._launch_stop_client, req, timeout=15.0)
+        if not result.success:
+            raise RuntimeError(f"Launch agent stop failed: {result.message}")
+        log.info("Launch agent stopped [%s]: %s", key, result.message)
+        return result
+
+    def launch_running(self, key: str) -> bool:
+        """Check if a launch key is running on the remote launch agent."""
+        req = LaunchStatus.Request()
+        req.key = key
+        result = self._call_service(self._launch_status_client, req, timeout=5.0)
+        for i, k in enumerate(result.keys):
+            if k == key:
+                return result.running[i]
+        return False
+
+    def launch_stop_all(self):
+        """Stop all known launch keys. Best-effort — errors are logged but not raised."""
+        for key in ALL_LAUNCH_KEYS:
+            try:
+                self.launch_stop(key)
+            except Exception as e:
+                log.warning("Failed to stop [%s] during kill_all: %s", key, e)
+
+    # ------------------------------------------------------------------
+    # Map saving
+    # ------------------------------------------------------------------
 
     def save_map(self, map_stem: str):
         """
@@ -302,7 +317,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     log.info("Shutting down orchestrator")
     log.removeHandler(rosout_handler)
-    state.kill_all()
+    try:
+        ros_node.launch_stop_all()
+    except Exception as e:
+        log.warning("Error stopping launches on shutdown: %s", e)
     rclpy.shutdown()
 
 
@@ -394,11 +412,11 @@ def start_mapping():
         raise HTTPException(409, "Already in mapping mode")
 
     # Stop conflicting stacks
-    state._kill("localization")
-    state._kill("nav2")
+    ros_node.launch_stop("localization")
+    ros_node.launch_stop("nav2")
     state.current_goal_handle = None
 
-    state._ros2_launch("mapping", MAPPING_LAUNCH_PKG, MAPPING_LAUNCH_FILE)
+    ros_node.launch_start("mapping", MAPPING_LAUNCH_PKG, MAPPING_LAUNCH_FILE)
     state.mode = RobotMode.MAPPING
     state.active_map = None
     return {"status": "mapping started"}
@@ -418,7 +436,7 @@ def stop_mapping(body: MapName):
     except Exception as e:
         raise HTTPException(500, f"Failed to save map: {e}")
 
-    state._kill("mapping")
+    ros_node.launch_stop("mapping")
     state.mode = RobotMode.IDLE
     state.active_map = body.name
     return {"status": "map saved", "map": body.name}
@@ -446,17 +464,16 @@ def save_map_only(body: MapName):
 def start_localization(body: MapName):
     """
     Load a saved map and start SLAM toolbox in localization mode.
-    Matches your journal's: ros2 launch slam slam_localization.launch.py map_file:=maps/<name>
     """
     map_yaml = MAPS_DIR / f"{body.name}.yaml"
     if not map_yaml.exists():
         raise HTTPException(404, f"Map '{body.name}' not found at {map_yaml}")
 
     # Stop conflicting stacks
-    state._kill("mapping")
-    state._kill("nav2")
+    ros_node.launch_stop("mapping")
+    ros_node.launch_stop("nav2")
 
-    state._ros2_launch(
+    ros_node.launch_start(
         "localization",
         LOCALIZATION_LAUNCH_PKG,
         LOCALIZATION_LAUNCH_FILE,
@@ -583,28 +600,19 @@ def start_autonomy():
         RobotMode.LOCALIZING, RobotMode.IDLE,
         detail="Start localization first before enabling autonomy",
     )
-    if not state.process_running("localization"):
+    if not ros_node.launch_running("localization"):
         raise HTTPException(
             409, "Localization stack is not running. Call /localization/start first.")
 
-    # Build launch args
-    extra_args = []
+    # Build launch args — params file and map are on the lidar_node container
+    extra_args = [f"params_file:={NAV2_PARAMS_FILE}"]
 
-    params_file = Path(NAV2_PARAMS_FILE)
-    if params_file.exists():
-        extra_args.append(f"params_file:={params_file}")
-        log.info("Using Nav2 params file: %s", params_file)
-    else:
-        log.warning(
-            "Nav2 params file not found at %s — using Nav2 defaults (not tuned for Kobuki)", params_file)
-
-    map_yaml = MAPS_DIR / \
-        f"{state.active_map}.yaml" if state.active_map else None
-    if map_yaml and map_yaml.exists():
+    if state.active_map:
+        map_yaml = MAPS_DIR / f"{state.active_map}.yaml"
         extra_args.append(f"map:={map_yaml}")
 
-    state._ros2_launch("nav2", NAV2_LAUNCH_PKG,
-                       NAV2_LAUNCH_FILE, extra_args=extra_args)
+    ros_node.launch_start("nav2", NAV2_LAUNCH_PKG,
+                          NAV2_LAUNCH_FILE, extra_args=extra_args)
     state.mode = RobotMode.AUTONOMOUS
     return {"status": "autonomy stack started", "map": state.active_map}
 
@@ -619,9 +627,9 @@ def stop_autonomy():
             log.warning("Error cancelling goal on stop: %s", e)
         state.current_goal_handle = None
 
-    state._kill("nav2")
+    ros_node.launch_stop("nav2")
     # Drop back to localizing if that stack is still alive
-    if state.process_running("localization"):
+    if ros_node.launch_running("localization"):
         state.mode = RobotMode.LOCALIZING
     else:
         state.mode = RobotMode.IDLE
@@ -638,12 +646,12 @@ def start_joystick():
     Start joystick teleoperation as an overlay control process.
     This does not change the robot mode state machine.
     """
-    if state.process_running("joystick"):
+    if ros_node.launch_running("joystick"):
         raise HTTPException(409, "Joystick control is already running")
 
     try:
-        state._ros2_launch("joystick", JOYSTICK_LAUNCH_PKG,
-                           JOYSTICK_LAUNCH_FILE)
+        ros_node.launch_start("joystick", JOYSTICK_LAUNCH_PKG,
+                              JOYSTICK_LAUNCH_FILE)
     except Exception as e:
         raise HTTPException(500, f"Failed to start joystick control: {e}")
 
@@ -660,13 +668,13 @@ def stop_joystick():
     Stop joystick teleoperation overlay process.
     This endpoint is idempotent and does not change robot mode.
     """
-    if not state.process_running("joystick"):
+    if not ros_node.launch_running("joystick"):
         return {
             "status": "joystick control already stopped",
             "mode": state.mode.value,
         }
 
-    state._kill("joystick")
+    ros_node.launch_stop("joystick")
     return {
         "status": "joystick control stopped",
         "mode": state.mode.value,
@@ -678,7 +686,7 @@ def stop_joystick():
 # ---------------------------------------------------------------------------
 
 @app.post("/navigation/goto", tags=["Navigation"])
-def goto(body: GoalRequest, background_tasks: BackgroundTasks):
+def goto(body: GoalRequest):
     """
     Send a NavigateToPose goal to Nav2.
     The call returns immediately; navigation runs asynchronously.
@@ -885,7 +893,7 @@ def emergency_stop():
         except Exception:
             pass
     state.current_goal_handle = None
-    state.kill_all()
+    ros_node.launch_stop_all()
     state.mode = RobotMode.IDLE
     return {"status": "emergency stop executed", "mode": "idle"}
 
