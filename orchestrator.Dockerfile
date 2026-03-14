@@ -38,5 +38,5 @@ COPY orchestrator/robot_orchestrator.py /robot_orchestrator.py
 # Source ROS + workspace, then run the server
 CMD ["/bin/bash", "-c", \
   "source /opt/ros/humble/setup.bash && \
-  source /ros_ws/install/setup.bash 2>/dev/null || true && \
+  source /ros2_ws/install/setup.bash 2>/dev/null || true && \
   python3 /robot_orchestrator.py"]
