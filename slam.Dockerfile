@@ -26,6 +26,7 @@ RUN apt-get update && \
   apt-get install -y ros-humble-slam-toolbox && \
   apt-get install -y ros-humble-teleop-twist-joy && \
   apt-get install -y ros-humble-joy && \
+  apt-get install -y ros-humble-nav2-bringup && \
   rm -rf /var/lib/apt/lists/*
 
 # Clone the Slamtec Lidar ROS2 driver into the src directory
