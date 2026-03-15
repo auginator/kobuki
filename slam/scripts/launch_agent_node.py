@@ -36,8 +36,7 @@ class LaunchAgentNode(Node):
         extra_args = list(request.extra_args)
 
         self.get_logger().info(
-            'Start requested: key=%s pkg=%s file=%s args=%s',
-            key, pkg, launch_file, extra_args,
+            f'Start requested: key={key} pkg={pkg} file={launch_file} args={extra_args}'
         )
 
         # Kill any existing process under this key
@@ -53,18 +52,18 @@ class LaunchAgentNode(Node):
             response.success = True
             response.message = f'Launched [{key}] (pid {proc.pid})'
             response.pid = proc.pid
-            self.get_logger().info('Launched [%s] pid=%d: %s', key, proc.pid, ' '.join(cmd))
+            self.get_logger().info(f'Launched [{key}] pid={proc.pid}: {" ".join(cmd)}')
         except Exception as e:
             response.success = False
             response.message = f'Failed to launch [{key}]: {e}'
             response.pid = 0
-            self.get_logger().error('Failed to launch [%s]: %s', key, e)
+            self.get_logger().error(f'Failed to launch [{key}]: {e}')
 
         return response
 
     def _handle_stop(self, request, response):
         key = request.key
-        self.get_logger().info('Stop requested: key=%s', key)
+        self.get_logger().info(f'Stop requested: key={key}')
 
         proc = self._processes.get(key)
         if proc is None or proc.poll() is not None:
@@ -100,12 +99,12 @@ class LaunchAgentNode(Node):
     def _kill(self, key: str):
         proc = self._processes.pop(key, None)
         if proc and proc.poll() is None:
-            self.get_logger().info('Terminating [%s] (pid %d)', key, proc.pid)
+            self.get_logger().info(f'Terminating [{key}] (pid {proc.pid})')
             try:
                 os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                 proc.wait(timeout=10)
             except Exception as e:
-                self.get_logger().warning('Error killing [%s]: %s', key, e)
+                self.get_logger().warning(f'Error killing [{key}]: {e}')
                 try:
                     os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
                 except Exception:
