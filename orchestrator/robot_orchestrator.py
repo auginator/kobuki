@@ -175,20 +175,18 @@ class OrchestratorNode(Node):
             return None
         return future.result()
 
-    def _wait_for_service(self, client, timeout: float) -> bool:
-        """Poll service_is_ready() instead of client.wait_for_service()."""
-        end = time.time() + timeout
-        while not client.service_is_ready() and time.time() < end:
-            time.sleep(0.1)
-        return client.service_is_ready()
-
     def _call_service(self, client, request, timeout=5.0):
-        if not self._wait_for_service(client, timeout):
-            raise RuntimeError(f"Service {client.srv_name} not available")
+        """Send a service request and wait for the response.
+
+        Skips wait_for_service / service_is_ready — those require graph
+        updates from the executor, which is running in another thread.
+        Instead we fire the request via Zenoh and let it time out naturally.
+        """
         future = client.call_async(request)
         result = self._wait_for_future(future, timeout)
         if result is None:
-            raise RuntimeError(f"Service call to {client.srv_name} timed out")
+            raise RuntimeError(
+                f"Service {client.srv_name} not available or timed out")
         return result
 
     # ------------------------------------------------------------------
