@@ -19,6 +19,7 @@ Run this inside your Docker network where ROS_DOMAIN_ID is shared with other con
 
 import json
 import logging
+import math
 import os
 import subprocess
 import time
@@ -31,7 +32,9 @@ import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from launch_agent_interfaces.srv import LaunchStart, LaunchStop, LaunchStatus
+from lifecycle_msgs.srv import GetState
 from nav2_msgs.action import NavigateToPose
+from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient
 from rclpy.node import Node
 from std_srvs.srv import Empty
@@ -64,6 +67,14 @@ JOYSTICK_LAUNCH_FILE = os.environ.get(
 
 # All known launch keys — used by kill_all / e-stop
 ALL_LAUNCH_KEYS = ["mapping", "localization", "nav2", "joystick"]
+
+# Nav2 lifecycle nodes to monitor (from nav2_params.yaml lifecycle_manager config)
+NAV2_LIFECYCLE_NODES = [
+    "controller_server",
+    "planner_server",
+    "bt_navigator",
+    "behavior_server",
+]
 
 FIXED_FRAME = "map"
 BASE_FRAME = "base_footprint"
@@ -119,14 +130,21 @@ class RobotState:
         self.teleop_enabled: bool = False
         self.current_goal_handle = None
 
-    def to_dict(self) -> dict:
-        return {
+    def to_dict(self, ros_node=None, goal_handle=None) -> dict:
+        d = {
             "mode": self.mode.value,
             "active_map": self.active_map,
             "active_annotations": self.active_annotations,
             "teleop_enabled": self.teleop_enabled,
             "annotation_count": len(self.annotations.get("waypoints", [])),
         }
+        if ros_node:
+            d["processes"] = ros_node.get_launch_statuses()
+            d["navigation"] = ros_node.get_navigation_status(goal_handle)
+            d["pose"] = ros_node.get_pose()
+            if self.mode == RobotMode.AUTONOMOUS:
+                d["nav2_lifecycle"] = ros_node.get_nav2_lifecycle()
+        return d
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +171,16 @@ class OrchestratorNode(Node):
             LaunchStop, "launch_agent/stop")
         self._launch_status_client = self.create_client(
             LaunchStatus, "launch_agent/status")
+
+        # Odometry subscription — latest msg cached for /status
+        self._latest_odom: Optional[Odometry] = None
+        self.create_subscription(Odometry, '/odom', self._odom_cb, 10)
+
+        # Nav2 lifecycle state clients
+        self._lifecycle_clients = {
+            name: self.create_client(GetState, f'/{name}/get_state')
+            for name in NAV2_LIFECYCLE_NODES
+        }
 
         self.get_logger().info("OrchestratorNode ready")
 
@@ -244,6 +272,83 @@ class OrchestratorNode(Node):
                 self.launch_stop(key)
             except Exception as e:
                 log.warning("Failed to stop [%s] during kill_all: %s", key, e)
+
+    # ------------------------------------------------------------------
+    # Odom callback
+    # ------------------------------------------------------------------
+
+    def _odom_cb(self, msg: Odometry):
+        self._latest_odom = msg
+
+    # ------------------------------------------------------------------
+    # Status query helpers
+    # ------------------------------------------------------------------
+
+    def get_launch_statuses(self) -> dict:
+        """Query launch agent for status of all tracked processes."""
+        try:
+            req = LaunchStatus.Request()
+            req.key = ""  # empty = return all
+            result = self._call_service(self._launch_status_client, req)
+            return {
+                key: {"running": running, "pid": pid}
+                for key, running, pid in zip(result.keys, result.running, result.pids)
+            }
+        except Exception:
+            return {"error": "launch agent unreachable"}
+
+    def get_pose(self) -> dict:
+        """Extract pose and velocity from cached odometry."""
+        odom = self._latest_odom
+        if odom is None:
+            return {"available": False}
+        pos = odom.pose.pose.position
+        ori = odom.pose.pose.orientation
+        yaw = math.atan2(2.0 * (ori.w * ori.z + ori.x * ori.y),
+                         1.0 - 2.0 * (ori.y * ori.y + ori.z * ori.z))
+        vel = odom.twist.twist
+        return {
+            "available": True,
+            "x": pos.x,
+            "y": pos.y,
+            "yaw": round(yaw, 4),
+            "linear_velocity": round(vel.linear.x, 4),
+            "angular_velocity": round(vel.angular.z, 4),
+            "frame": odom.header.frame_id,
+        }
+
+    _STATE_LABELS = {0: "unknown", 1: "unconfigured", 2: "inactive", 3: "active", 4: "finalized"}
+
+    def get_nav2_lifecycle(self) -> dict:
+        """Query Nav2 node lifecycle states. Only meaningful when autonomy is running."""
+        states = {}
+        for name, client in self._lifecycle_clients.items():
+            try:
+                req = GetState.Request()
+                result = self._call_service(client, req, timeout=2.0)
+                states[name] = self._STATE_LABELS.get(result.current_state.id, "unknown")
+            except Exception:
+                states[name] = "unavailable"
+        return states
+
+    def get_navigation_status(self, goal_handle) -> dict:
+        """Return navigation goal status as a dict."""
+        if not goal_handle:
+            return {"goal_active": False, "status": "idle"}
+        status_map = {
+            GoalStatus.STATUS_UNKNOWN:   "unknown",
+            GoalStatus.STATUS_ACCEPTED:  "accepted",
+            GoalStatus.STATUS_EXECUTING: "executing",
+            GoalStatus.STATUS_CANCELING: "canceling",
+            GoalStatus.STATUS_SUCCEEDED: "succeeded",
+            GoalStatus.STATUS_CANCELED:  "canceled",
+            GoalStatus.STATUS_ABORTED:   "aborted",
+        }
+        code = goal_handle.status
+        return {
+            "goal_active": code in (GoalStatus.STATUS_ACCEPTED, GoalStatus.STATUS_EXECUTING),
+            "status": status_map.get(code, "unknown"),
+        }
 
     # ------------------------------------------------------------------
     # Map saving
@@ -415,7 +520,7 @@ def require_mode(*modes: RobotMode, detail: str = None):
 @app.get("/status", tags=["Status"])
 def get_status():
     """Return full robot state snapshot."""
-    return state.to_dict()
+    return state.to_dict(ros_node=ros_node, goal_handle=state.current_goal_handle)
 
 
 @app.get("/maps", tags=["Status"])
@@ -786,24 +891,7 @@ def cancel_navigation():
 @app.get("/navigation/status", tags=["Navigation"])
 def navigation_status():
     """Return the status of the current navigation goal."""
-    if not state.current_goal_handle:
-        return {"goal_active": False, "status": "idle"}
-
-    status_map = {
-        GoalStatus.STATUS_UNKNOWN:   "unknown",
-        GoalStatus.STATUS_ACCEPTED:  "accepted",
-        GoalStatus.STATUS_EXECUTING: "executing",
-        GoalStatus.STATUS_CANCELING: "canceling",
-        GoalStatus.STATUS_SUCCEEDED: "succeeded",
-        GoalStatus.STATUS_CANCELED:  "canceled",
-        GoalStatus.STATUS_ABORTED:   "aborted",
-    }
-    code = state.current_goal_handle.status
-    return {
-        "goal_active": code in (GoalStatus.STATUS_ACCEPTED, GoalStatus.STATUS_EXECUTING),
-        "status": status_map.get(code, "unknown"),
-        "code": code,
-    }
+    return ros_node.get_navigation_status(state.current_goal_handle)
 
 
 # ---------------------------------------------------------------------------

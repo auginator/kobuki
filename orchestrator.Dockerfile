@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   ros-humble-action-msgs \
   ros-humble-slam-toolbox \
   ros-humble-rosidl-default-generators \
+  ros-humble-nav-msgs \
+  ros-humble-lifecycle-msgs \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir fastapi uvicorn[standard] pydantic
