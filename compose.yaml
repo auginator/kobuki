@@ -66,7 +66,7 @@ services:
     restart: unless-stopped
     networks:
       - ros_network
-    privileged: false
+    privileged: true
     environment:
       - RMW_IMPLEMENTATION=rmw_zenoh_cpp
       - ZENOH_SESSION_CONFIG_URI=/zenoh_config.json5
@@ -80,7 +80,7 @@ services:
       - NAV2_LAUNCH_FILE=navigation_launch.py
       - NAV2_PARAMS_FILE=/ros2_ws/install/slam/share/slam/config/nav2_params.yaml
     volumes:
-      - ./zenoh_config_no_shm.json5:/zenoh_config.json5
+      - ./zenoh_config.json5:/zenoh_config.json5
       # Live-edit the orchestrator without rebuilding
       # - ./robot_orchestrator.py:/robot_orchestrator.py:ro
       # Shared maps directory — all containers see the same maps
