@@ -116,6 +116,7 @@ class RobotState:
         self.active_map: Optional[str] = None
         self.active_annotations: Optional[str] = None
         self.annotations: dict = {}
+        self.teleop_enabled: bool = False
         self.current_goal_handle = None
 
     def to_dict(self) -> dict:
@@ -123,6 +124,7 @@ class RobotState:
             "mode": self.mode.value,
             "active_map": self.active_map,
             "active_annotations": self.active_annotations,
+            "teleop_enabled": self.teleop_enabled,
             "annotation_count": len(self.annotations.get("waypoints", [])),
         }
 
@@ -663,6 +665,7 @@ def start_joystick():
     except Exception as e:
         raise HTTPException(500, f"Failed to start joystick control: {e}")
 
+    state.teleop_enabled = True
     return {
         "status": "joystick control started",
         "launch": f"{JOYSTICK_LAUNCH_PKG}/{JOYSTICK_LAUNCH_FILE}",
@@ -683,6 +686,7 @@ def stop_joystick():
         }
 
     ros_node.launch_stop("joystick")
+    state.teleop_enabled = False
     return {
         "status": "joystick control stopped",
         "mode": state.mode.value,
@@ -903,6 +907,7 @@ def emergency_stop():
     state.current_goal_handle = None
     ros_node.launch_stop_all()
     state.mode = RobotMode.IDLE
+    state.teleop_enabled = False
     return {"status": "emergency stop executed", "mode": "idle"}
 
 
