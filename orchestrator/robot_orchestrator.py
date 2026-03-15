@@ -158,16 +158,38 @@ class OrchestratorNode(Node):
 
     # ------------------------------------------------------------------
     # Service helpers
+    #
+    # rclpy.spin(ros_node) runs in a background thread and processes
+    # all callbacks. We must NOT call spin_until_future_complete from
+    # FastAPI worker threads — two threads can't spin the same node.
+    # Instead we poll futures until the background spin thread resolves them.
     # ------------------------------------------------------------------
 
+    def _wait_for_future(self, future, timeout: float):
+        """Poll a future until done. The background spin thread resolves it."""
+        end = time.time() + timeout
+        while not future.done() and time.time() < end:
+            time.sleep(0.05)
+        if not future.done():
+            future.cancel()
+            return None
+        return future.result()
+
+    def _wait_for_service(self, client, timeout: float) -> bool:
+        """Poll service_is_ready() instead of client.wait_for_service()."""
+        end = time.time() + timeout
+        while not client.service_is_ready() and time.time() < end:
+            time.sleep(0.1)
+        return client.service_is_ready()
+
     def _call_service(self, client, request, timeout=5.0):
-        if not client.wait_for_service(timeout_sec=timeout):
+        if not self._wait_for_service(client, timeout):
             raise RuntimeError(f"Service {client.srv_name} not available")
         future = client.call_async(request)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout)
-        if future.result() is None:
-            raise RuntimeError(f"Service call to {client.srv_name} failed")
-        return future.result()
+        result = self._wait_for_future(future, timeout)
+        if result is None:
+            raise RuntimeError(f"Service call to {client.srv_name} timed out")
+        return result
 
     # ------------------------------------------------------------------
     # Launch agent helpers
@@ -281,8 +303,7 @@ class OrchestratorNode(Node):
         )
 
         future = self._nav_action_client.send_goal_async(goal_msg)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=10.0)
-        goal_handle = future.result()
+        goal_handle = self._wait_for_future(future, timeout=10.0)
         if not goal_handle or not goal_handle.accepted:
             raise RuntimeError("Navigation goal was rejected by Nav2")
         return goal_handle
@@ -291,7 +312,7 @@ class OrchestratorNode(Node):
         if goal_handle is None:
             return
         future = goal_handle.cancel_goal_async()
-        rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        self._wait_for_future(future, timeout=5.0)
 
 
 # ---------------------------------------------------------------------------
