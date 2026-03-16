@@ -66,6 +66,8 @@ services:
     restart: unless-stopped
     networks:
       - ros_network
+    devices:
+      - /dev/input/js0:/dev/input/js0
     privileged: true
     environment:
       - RMW_IMPLEMENTATION=rmw_zenoh_cpp

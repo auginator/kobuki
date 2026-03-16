@@ -261,8 +261,6 @@ lifecycle_manager:
     autostart: true
     node_names:
       - controller_server
-      - smoother_server
       - planner_server
       - behavior_server
       - bt_navigator
-      - waypoint_follower
