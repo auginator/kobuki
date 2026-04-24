@@ -1,104 +1,41 @@
-# CLAUDE.md
+# collabs-kobuki — Kobuki-based autonomous robot
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This repo is the ROS 2 stack for Gus's Kobuki-based autonomous mobile robot (Raspberry Pi 5, ROS 2 Humble in Docker, SLAM Toolbox, Nav2-bound, FastAPI orchestrator).
 
-## Project Overview
+## Wiki — read this first for orientation
 
-An autonomous mobile robot built on a Kobuki base with a Raspberry Pi 5, running ROS2 Humble in Docker. The system currently supports SLAM-based mapping and localization via RPLidar C1, PS4 controller teleoperation, and a FastAPI orchestrator for managing robot operations. The next milestones are Nav2 autonomous navigation, RealSense D435 integration, and a management web application.
+There is a separate knowledge base for this project at:
 
-## Build & Run Commands
-
-<!-- How to build, run, test. Docker commands, colcon commands, etc. -->
-
-### Build
-```bash
-# Docker build commands here
+```
+/Users/agus/Documents/Claude/Projects/Turtlebot 2 Autonomous Robot/Wiki/
 ```
 
-### Run
-```bash
-# Docker compose / launch commands here
-```
+Before answering about hardware, the power system, SLAM, the orchestrator, visualization, or "why did we do X", read:
 
-### Test
-```bash
-# How to run tests
-```
+- `Wiki/README.md` — curated map of content. Start here.
+- `Wiki/CLAUDE.md` — LLM-specific orientation (folder semantics, status conventions, hard rules).
 
-## Architecture
+The wiki is authoritative about **context, history, and why**. The code in this repo is authoritative about **current implementation**. If a wiki note contradicts the code, treat the wiki as potentially stale — flag it so Gus can update, don't silently follow it.
 
-```mermaid
-graph TD
-    subgraph "Raspberry Pi 5 (Docker)"
-        A[Kobuki Base Node] -->|/odom| D[SLAM Toolbox]
-        B[RPLidar C1 Node] -->|/scan| D
-        D -->|/map, /tf| E[Nav2 Stack]
-        C[RealSense D435 Node] -->|/depth, /pointcloud| E
-        F[Foxglove Bridge] ---|websocket| G[Foxglove on Mac]
-        H[Teleop Twist Joy] -->|/cmd_vel| A
-        E -->|/cmd_vel| A
-        I[FastAPI Orchestrator] -->|rclpy| D
-        I -->|rclpy| E
-        I -->|subprocess| A
-    end
+## Wiki folders
 
-    subgraph "External"
-        J[Management Web App] -->|REST API| I
-    end
-```
+- `topics/hardware/`, `topics/power/`, `topics/software/` — how things work. One concept per file.
+- `topics/recipes/` — copy-pasteable commands.
+- `topics/troubleshooting/` — symptom → cause → fix.
+- `decisions/` — why a choice was made. Numbered, immutable (supersede rather than edit).
+- `journal/` — dated notes (currently sparse).
+- `attachments/` — images referenced by notes.
 
-### Containers
-<!-- Which Docker containers exist and what they run -->
-The robot is run as a Docker compose network (see @compose.yaml), with the following services
-- zenoh_router: We are using Zenoh as Robot Middleware (RMW). This is the router service.
-- kobuki: Bringup image for the kobuki base
-- lidar_node: SLAM/Lidar/Foxglove Bridge/Joystick node - the idea is to consolidate the mapping/visualization code here
-- orchestrator: Python ROS2 application, orchestrates lower level robot modes/behavior
+## Workflow
 
-### ROS2 Packages
-<!-- Key packages in src/, what each does -->
-- ros-humble-action-msgs
-- ros-humble-foxglove-bridge
-- ros-humble-geometry-msgs
-- ros-humble-joint-state-publisher
-- ros-humble-joy
-- ros-humble-kobuki-ros-interfaces
-- ros-humble-nav2-behaviors
-- ros-humble-nav2-bringup
-- ros-humble-nav2-bt-navigator
-- ros-humble-nav2-controller
-- ros-humble-nav2-core
-- ros-humble-nav2-costmap-2d
-- ros-humble-nav2-lifecycle-manager
-- ros-humble-nav2-map-server
-- ros-humble-nav2-msgs
-- ros-humble-nav2-navfn-planner
-- ros-humble-nav2-planner
-- ros-humble-nav2-regulated-pure-pursuit-controller
-- ros-humble-nav2-velocity-smoother
-- ros-humble-nav2-waypoint-follower
-- ros-humble-rmw-zenoh-cpp
-- ros-humble-robot-state-publisher
-- ros-humble-slam-toolbox
-- ros-humble-teleop-twist-joy
-- ros-humble-xacro
+When you finish a substantive piece of work in this repo, run the `/wiki-update` slash command to propose wiki updates. **Do not update the wiki silently** — propose the diff first, let Gus review, then write.
 
-### Orchestrator
-<!-- FastAPI orchestrator: where it lives, how it interacts with ROS2 -->
-- Source: @orchestrator/robot_orchestrator.py
-- Container: @orchestrator.Dockerfile
+Small commits and routine refactors do not require wiki updates. Reserve updates for new concepts, solved problems, and non-obvious decisions.
 
-The Orchestrator is our highest level abstraction, serving as a central control system for managing the robot behavior, allowing us to switch between different modes, and use ROS to make high level calls (e.g. mapping/localization/NAV2 calls).
+## Hard rules
 
-## Key Configuration
-
-<!-- Important config files, parameters, topic/frame names -->
-
-## Development Notes
-
-<!-- Robot vs dev machine workflow, how to verify changes, common pitfalls -->
-- Note that the host machine we are running on is NOT the robot, and cannot be used to test directly. Always ask user to validate changes that must be done on the robot.
-
-## Known Gotchas
-
-<!-- Things that commonly trip people up -->
+- **The dual-rail power architecture is planned, not built.** See `Wiki/topics/power/power-architecture.md` — status is `planned`. The current live power is the ad-hoc USB-splitter setup. Do not write or speak as if the dual-rail is installed.
+- **Do not invent ROS 2 commands.** If a recipe isn't in `Wiki/topics/recipes/` or clearly in the repo, say so rather than guessing.
+- **Interactive verification before implementation** is Gus's preferred working style — prefer `ros2 topic echo` / `ros2 topic info` checks over speculative code.
+- **Production-ready file delivery.** No pseudocode, no partial examples — complete files.
+- **Markdown + Mermaid** for all documentation.
