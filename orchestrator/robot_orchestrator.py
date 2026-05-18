@@ -331,18 +331,6 @@ class OrchestratorNode(Node):
                 states[name] = "unavailable"
         return states
 
-    def wait_for_nav2_ready(self, timeout: float = 30.0) -> bool:
-        """Poll Nav2 lifecycle nodes until all are active or timeout elapses."""
-        end = time.time() + timeout
-        while time.time() < end:
-            states = self.get_nav2_lifecycle()
-            active_count = sum(1 for s in states.values() if s == "active")
-            log.info("Nav2 lifecycle check: %s", states)
-            if active_count >= len(NAV2_LIFECYCLE_NODES):
-                return True
-            time.sleep(2.0)
-        return False
-
     def get_navigation_status(self, goal_handle) -> dict:
         """Return navigation goal status as a dict."""
         if not goal_handle:
@@ -392,6 +380,19 @@ class OrchestratorNode(Node):
     # ------------------------------------------------------------------
     # Navigation actions
     # ------------------------------------------------------------------
+
+    def wait_for_nav2_ready(self, timeout: float = 30.0) -> bool:
+        """Poll Nav2 lifecycle nodes until all are active, or timeout elapses."""
+        target_nodes = ["controller_server", "bt_navigator", "planner_server", "behavior_server"]
+        end = time.time() + timeout
+        while time.time() < end:
+            states = self.get_nav2_lifecycle()
+            active_count = sum(1 for s in states.values() if s == "active")
+            log.info(f"Nav2 lifecycle check ({active_count}/{len(target_nodes)} active): {states}")
+            if active_count >= len(target_nodes):
+                return True
+            time.sleep(2.0)
+        return False
 
     def send_goal(self, x: float, y: float, yaw: float = 0.0, frame: str = FIXED_FRAME):
         """Send a NavigateToPose goal. Returns the goal handle."""
@@ -755,14 +756,10 @@ def start_autonomy():
         raise HTTPException(
             409, "Localization stack is not running. Call /localization/start first.")
 
-    extra_args = [
-        f"params_file:={NAV2_PARAMS_FILE}",
-        "use_respawn:=true",
-        "autostart:=true",
-    ]
-    # Do NOT pass map:= — /map is provided by SLAM Toolbox localization,
-    # not by nav2_bringup's map_server. Passing it is misleading and breaks
-    # if navigation_launch.py ever starts its own map_server.
+    # Build launch args — /map topic is provided by SLAM Toolbox localization,
+    # so we only pass params_file. navigation_launch.py doesn't use map:= and
+    # passing it is misleading (that arg is for bringup_launch.py's map_server).
+    extra_args = [f"params_file:={NAV2_PARAMS_FILE}"]
 
     ros_node.launch_start("nav2", NAV2_LAUNCH_PKG,
                           NAV2_LAUNCH_FILE, extra_args=extra_args)
@@ -771,7 +768,7 @@ def start_autonomy():
     log.info("Waiting for Nav2 lifecycle nodes to become active...")
     if not ros_node.wait_for_nav2_ready(timeout=30.0):
         lifecycle = ros_node.get_nav2_lifecycle()
-        log.warning("Nav2 lifecycle not fully active after 30s: %s", lifecycle)
+        log.warning(f"Nav2 lifecycle not fully active after 30s: {lifecycle}")
         return {
             "status": "autonomy started (nav2 still initializing)",
             "map": state.active_map,
