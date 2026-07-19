@@ -4,23 +4,34 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import Command
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
 
-    # Static transform: base_footprint -> base_link (10.2mm vertical offset)
-    # Needed because kobuki_node publishes odom->base_footprint, but the URDF
-    # has base_link->base_footprint (backwards). We publish the correct direction.
-    base_footprint_to_base_link = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='base_footprint_to_base_link',
-        arguments=['0', '0', '0.0102', '0', '0', '0', 'base_footprint', 'base_link'],
-        output='screen'
+    # Robot description. Uses a repo-local URDF (augs_bringup/urdf/kobuki_augs.urdf.xacro)
+    # that owns base_footprint -> base_link in the correct direction. This replaces the
+    # stock kobuki_description URDF (which published base_link -> base_footprint backwards)
+    # and the separate static_transform_publisher we used to patch around it, both of which
+    # together created a TF tree cycle. base_footprint is the URDF root; kobuki_node supplies
+    # odom -> base_footprint.
+    urdf_path = os.path.join(
+        get_package_share_directory('augs_bringup'),
+        'urdf', 'kobuki_augs.urdf.xacro')
+
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[{
+            'use_sim_time': False,
+            'robot_description': Command(['xacro ', urdf_path]),
+        }]
     )
 
-    # Include the original kobuki_node launch file
+    # Include the original kobuki_node launch file (publishes odom -> base_footprint)
     kobuki_node_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory(
@@ -28,22 +39,9 @@ def generate_launch_description():
         )
     )
 
-    # Add the kobuki_description launch file
-    kobuki_description_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory(
-                'kobuki_description'), 'launch', 'kobuki_description.launch.py')
-        ),
-        launch_arguments={
-            'use_rviz': 'False',
-            'use_sim_time': 'False'
-        }.items()
-    )
-
     ld = LaunchDescription()
 
-    ld.add_action(base_footprint_to_base_link)
+    ld.add_action(robot_state_publisher)
     ld.add_action(kobuki_node_launch)
-    ld.add_action(kobuki_description_launch)
 
     return ld
