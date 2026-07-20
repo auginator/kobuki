@@ -47,6 +47,11 @@ services:
     volumes:
       - ./zenoh_config_no_shm.json5:/zenoh_config_no_shm.json5
       - ./maps:/ros2_ws/maps
+      # Mount host /dev so the udev symlink /dev/rplidar (and its target) are
+      # visible inside the container. Under privileged the container otherwise
+      # gets a bare devtmpfs without udev symlinks, so /dev/rplidar is missing
+      # and the sllidar driver can't find the lidar. Matches the kobuki service.
+      - /dev:/dev
     privileged: true
     devices:
       - /dev/rplidar:/dev/rplidar
