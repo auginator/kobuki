@@ -9,12 +9,17 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    # Include the sllidar_ros2 launch file
+    # Include the sllidar_ros2 launch file.
+    # Pin serial_port to the /dev/rplidar udev symlink instead of the upstream
+    # default /dev/ttyUSB0: ttyUSB numbering is assigned in USB enumeration order
+    # and is non-deterministic across reboots, so ttyUSB0 can be the Kobuki base.
+    # /dev/rplidar always follows the lidar by serial number.
     sllidar_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory(
                 'sllidar_ros2'), 'launch', 'sllidar_c1_launch.py')
-        )
+        ),
+        launch_arguments={'serial_port': '/dev/rplidar'}.items()
     )
 
     # Static transform publisher from base_link to laser (sensor mounting)
