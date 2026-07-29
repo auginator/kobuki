@@ -23,7 +23,8 @@ def generate_launch_description():
             executable='teleop_node',
             name='teleop_twist_joy_node',
             parameters=[config],
-            # No remappings needed, default configuration(below) is fine
-            # remappings=[('cmd_vel', 'cmd_vel')]
+            # Publish into the cmd_vel_mux joystick input (priority 10) so the
+            # joystick preempts autonomous motion instead of dogpiling /cmd_vel.
+            remappings=[('cmd_vel', '/mux/input/joystick')],
         ),
     ])

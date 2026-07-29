@@ -8,10 +8,11 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 
-# Install launch and urdf files
+# Install launch, urdf and config files
 install(DIRECTORY
   launch
   urdf
+  config
   DESTINATION share/${PROJECT_NAME}/
 )
 

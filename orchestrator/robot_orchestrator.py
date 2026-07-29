@@ -31,7 +31,7 @@ from typing import Optional
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, Twist
 from launch_agent_interfaces.srv import LaunchStart, LaunchStop, LaunchStatus
 from lifecycle_msgs.srv import GetState
 from nav2_msgs.action import NavigateToPose
@@ -129,6 +129,10 @@ class RobotState:
         self.active_annotations: Optional[str] = None
         self.annotations: dict = {}
         self.teleop_enabled: bool = False
+        # When True, the orchestrator continuously publishes zeros to the
+        # cmd_vel_mux estop_hold input (priority 999), forcing the robot to stop
+        # regardless of any other command source. Cleared via POST /estop/clear.
+        self.estopped: bool = False
         self.current_goal_handle = None
 
     def to_dict(self, ros_node=None, goal_handle=None) -> dict:
@@ -137,6 +141,7 @@ class RobotState:
             "active_map": self.active_map,
             "active_annotations": self.active_annotations,
             "teleop_enabled": self.teleop_enabled,
+            "estopped": self.estopped,
             "annotation_count": len(self.annotations.get("waypoints", [])),
         }
         if ros_node:
@@ -183,7 +188,20 @@ class OrchestratorNode(Node):
             for name in NAV2_LIFECYCLE_NODES
         }
 
+        # Software e-stop hold: publish zeros to the cmd_vel_mux estop_hold input
+        # (priority 999) at 10 Hz while state.estopped is set. The timer runs on
+        # the rclpy executor thread — publishing from here (not a FastAPI handler
+        # thread) avoids the rclpy cross-thread hazard. 10 Hz stays well inside the
+        # estop_hold input's 0.3 s timeout so the hold never lapses while active.
+        self._estop_hold_pub = self.create_publisher(
+            Twist, 'mux/input/estop_hold', 10)
+        self.create_timer(0.1, self._estop_hold_cb)
+
         self.get_logger().info("OrchestratorNode ready")
+
+    def _estop_hold_cb(self):
+        if state.estopped:
+            self._estop_hold_pub.publish(Twist())
 
     # ------------------------------------------------------------------
     # Service helpers
@@ -1134,10 +1152,14 @@ def clear_costmap():
 @app.post("/estop", tags=["Utilities"])
 def emergency_stop():
     """
-    Kill all running stacks and cancel navigation immediately.
-    Puts robot in IDLE mode.
+    Emergency stop. Asserts a priority-999 hold on cmd_vel_mux (zeros preempt
+    every other source) AND kills all running stacks / cancels navigation.
+    Puts the robot in IDLE mode. The hold latches until POST /estop/clear.
     """
     log.warning("E-STOP triggered via API")
+    # Assert the mux hold first so the robot is pinned to zero even before the
+    # source stacks finish tearing down.
+    state.estopped = True
     if state.current_goal_handle:
         try:
             ros_node.cancel_current_goal(state.current_goal_handle)
@@ -1147,7 +1169,18 @@ def emergency_stop():
     ros_node.launch_stop_all()
     state.mode = RobotMode.IDLE
     state.teleop_enabled = False
-    return {"status": "emergency stop executed", "mode": "idle"}
+    return {"status": "emergency stop executed", "mode": "idle", "estopped": True}
+
+
+@app.post("/estop/clear", tags=["Utilities"])
+def clear_emergency_stop():
+    """
+    Release the software e-stop hold so command sources can drive the robot
+    again. The priority-999 hold otherwise blocks every source, including teleop.
+    """
+    log.warning("E-STOP cleared via API")
+    state.estopped = False
+    return {"status": "emergency stop cleared", "estopped": False}
 
 
 # ---------------------------------------------------------------------------
