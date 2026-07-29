@@ -21,6 +21,7 @@ import json
 import logging
 import math
 import os
+import re
 import subprocess
 import time
 from contextlib import asynccontextmanager
@@ -354,24 +355,81 @@ class OrchestratorNode(Node):
     # Map saving
     # ------------------------------------------------------------------
 
+    def _call_slam_service(self, service: str, srv_type: str, request: str,
+                           timeout: float = 20.0) -> int:
+        """
+        Call a slam_toolbox service via subprocess and return its response
+        `result` code.
+
+        subprocess (not an in-process rclpy client) is used deliberately: the
+        FastAPI handlers run in threadpool threads, not the rclpy executor
+        thread, so an in-process client call would risk deadlock. Note that
+        `ros2 service call` exits 0 as long as the *call* completes — even when
+        the service reports failure — so we must parse the response `result`
+        field rather than trust the exit code.
+        """
+        proc = subprocess.run(
+            ["ros2", "service", "call", service, srv_type, request],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"{service} call failed (is slam_toolbox running?): "
+                f"{proc.stderr.strip() or proc.stdout.strip()}"
+            )
+        m = re.search(r"result=(\d+)", proc.stdout)
+        if not m:
+            raise RuntimeError(
+                f"{service} returned no result code. Output: {proc.stdout.strip()}"
+            )
+        return int(m.group(1))
+
     def save_map(self, map_stem: str):
         """
-        Call the slam_toolbox save_map service. This is done via subprocess
-        because the srv type import is optional depending on install.
+        Save the current SLAM map in BOTH formats that the rest of the stack
+        needs:
+
+          - occupancy grid (<stem>.pgm + <stem>.yaml) via save_map — used by
+            Nav2 and visualization;
+          - serialized pose-graph (<stem>.posegraph + <stem>.data) via
+            serialize_map — REQUIRED by slam_toolbox localization mode.
+
+        Both must succeed. Saving only the occupancy grid (the previous
+        behaviour) produced maps that segfault localization — the exact failure
+        the localization guard now rejects. The grid save is attempted first
+        because it fails cleanly (writing nothing) when no map has been built
+        yet, so a premature save leaves no partial files behind.
         """
         map_path = str(MAPS_DIR / map_stem)
-        result = subprocess.run(
-            [
-                "ros2", "service", "call",
-                "/slam_toolbox/save_map",
-                "slam_toolbox/srv/SaveMap",
-                f"{{name: {{data: '{map_path}'}}}}",
-            ],
-            capture_output=True, text=True, timeout=15,
+
+        # 1) Occupancy grid. result=1 (RESULT_NO_MAP_RECEIEVD) means slam_toolbox
+        #    has not published /map yet — there is nothing to save.
+        result = self._call_slam_service(
+            "/slam_toolbox/save_map",
+            "slam_toolbox/srv/SaveMap",
+            f"{{name: {{data: '{map_path}'}}}}",
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"Map save failed: {result.stderr}")
-        log.info("Map saved to %s", map_path)
+        if result == 1:
+            raise RuntimeError(
+                "No map has been built yet (slam_toolbox has not published "
+                "/map). Drive the robot to build the map before saving."
+            )
+        if result != 0:
+            raise RuntimeError(f"save_map failed (result={result}).")
+
+        # 2) Serialized pose-graph — what localization loads.
+        result = self._call_slam_service(
+            "/slam_toolbox/serialize_map",
+            "slam_toolbox/srv/SerializePoseGraph",
+            f"{{filename: '{map_path}'}}",
+        )
+        if result != 0:
+            raise RuntimeError(
+                f"serialize_map failed (result={result}) — no .posegraph/.data "
+                f"written; map would be unusable for localization."
+            )
+
+        log.info("Map saved to %s (.pgm/.yaml + .posegraph/.data)", map_path)
 
     def clear_costmaps(self):
         req = Empty.Request()
