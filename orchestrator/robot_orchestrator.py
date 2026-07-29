@@ -541,12 +541,43 @@ def get_status():
     return state.to_dict(ros_node=ros_node, goal_handle=state.current_goal_handle)
 
 
+def map_status(stem: str) -> dict:
+    """
+    Classify a saved map by its localization usability.
+
+    slam_toolbox localization deserializes a <stem>.posegraph + <stem>.data pair;
+    handing it a map without those files segfaults the node. The occupancy grid
+    (<stem>.pgm/.yaml) is only used by Nav2/visualization and is NOT sufficient
+    for localization. `usable` reflects whether localization can load the map.
+    """
+    has_posegraph = (MAPS_DIR / f"{stem}.posegraph").exists()
+    has_data = (MAPS_DIR / f"{stem}.data").exists()
+    has_grid = (MAPS_DIR / f"{stem}.yaml").exists()
+
+    if has_posegraph and has_data:
+        status = "usable"
+    elif has_posegraph and not has_data:
+        status = "missing_data"
+    else:
+        status = "missing_posegraph"
+
+    return {
+        "name": stem,
+        "usable": has_posegraph and has_data,
+        "status": status,
+        "has_serialized_graph": has_posegraph and has_data,
+        "has_occupancy_grid": has_grid,
+    }
+
+
 @app.get("/maps", tags=["Status"])
 def list_maps():
-    """Return available saved maps and annotation files."""
-    maps = [p.stem for p in MAPS_DIR.glob("*.yaml")]
+    """Return available saved maps with per-map localization usability status."""
+    stems = ({p.stem for p in MAPS_DIR.glob("*.yaml")}
+             | {p.stem for p in MAPS_DIR.glob("*.posegraph")})
+    maps = [map_status(s) for s in sorted(stems)]
     annotations = [p.name for p in MAPS_DIR.glob("*.annotations.json")]
-    return {"maps": sorted(maps), "annotations": sorted(annotations)}
+    return {"maps": maps, "annotations": sorted(annotations)}
 
 
 # ---------------------------------------------------------------------------
@@ -617,9 +648,24 @@ def start_localization(body: MapName):
     """
     Load a saved map and start SLAM toolbox in localization mode.
     """
-    map_yaml = MAPS_DIR / f"{body.name}.yaml"
-    if not map_yaml.exists():
-        raise HTTPException(404, f"Map '{body.name}' not found at {map_yaml}")
+    # slam_toolbox localization loads the serialized graph (<name>.posegraph +
+    # <name>.data), NOT the occupancy grid. Guard against handing it a map that
+    # lacks those files — doing so segfaults the node (exit -11) and leaves the
+    # mode wedged. Distinguish "no such map" (404) from "exists but unusable" (422).
+    st = map_status(body.name)
+    map_exists = any(
+        (MAPS_DIR / f"{body.name}{ext}").exists()
+        for ext in (".posegraph", ".data", ".yaml")
+    )
+    if not map_exists:
+        raise HTTPException(404, f"Map '{body.name}' not found in {MAPS_DIR}")
+    if not st["usable"]:
+        raise HTTPException(
+            422,
+            f"Map '{body.name}' is not usable for localization ({st['status']}): "
+            f"missing serialized graph (.posegraph/.data). Re-map the area, or "
+            f"re-save with serialization enabled.",
+        )
 
     # Stop conflicting stacks
     ros_node.launch_stop("mapping")
