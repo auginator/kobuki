@@ -76,7 +76,7 @@ controller_server:
       # first autonomous run). 0.10 is tighter without risking the controller
       # creeping near the goal (min_approach_linear_velocity is 0.05).
       xy_goal_tolerance: 0.10
-      yaw_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.15
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       desired_linear_vel: 0.15
